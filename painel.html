@@ -300,8 +300,13 @@ function mapSituacao(r){
 }
 
 // Vai pro topo (bloco fixo): agendado sem guia OU consulta de nutrição sem guia
-const COD_NUTRI='50000560';
-function vaiProTopo(x){ return x.m.pinned || (x.r.codigo_procedimento===COD_NUTRI && x.r.numero_guia==='sem guia'); }
+// Vai pro topo (bloco fixo): sem guia, OU guia que vence ANTES do dia da consulta
+// (validade < data do atendimento já cobre também a guia vencida, pois a consulta é hoje ou futura)
+function vaiProTopo(x){
+  if(x.r.numero_guia==='sem guia') return true;
+  const val=parseBR(x.r.validade_senha);
+  return val ? (val < startOfDay(x.dt)) : false;
+}
 
 /* ---------- Relógio (pequeno, na barra do topo) ---------- */
 function tick(){
@@ -399,7 +404,7 @@ function render(){
     html+=`<div class="pinned">
       <div class="pinned__head">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <div style="flex:1"><strong>Sem guia — resolver primeiro</strong> <span>— consultas novas e de nutrição que estão sem autorização.</span></div>
+        <div style="flex:1"><strong>Resolver antes da consulta</strong> <span>— sem guia, guia vencida, ou guia que vence antes do dia do atendimento.</span></div>
         <span class="pinned__count">${pinned.length}</span>
       </div>
       <div class="pinned__body">${pinned.map(x=>rowHtml(x,false)).join('')}</div>
