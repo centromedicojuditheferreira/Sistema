@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Próximos atendimentos · Centro Médico Judithe Ferreira</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EAEFF3; --surface:#FFFFFF; --surface-2:#F5F8FA;
+  --ink:#13242E; --ink-soft:#56676F; --ink-faint:#8597A0;
+  --line:#DBE3E9; --line-soft:#E8EDF1;
+  --brand:#0E6E7A; --brand-deep:#0A5560; --brand-soft:#E0F0F1;
+
+  --crit:#7C1226; --crit-edge:#9C1A33; --crit-bg:#F8E8EB;
+  --warn:#D32F45; --warn-edge:#D32F45; --warn-bg:#FCE9EC;
+  --caut:#B47608; --caut-edge:#E3A21A; --caut-bg:#FBF2DC;
+  --ok:#1C8B57; --ok-bg:#E3F2EA;
+
+  --radius:14px; --radius-sm:10px;
+  --shadow:0 1px 2px rgba(19,36,46,.04),0 8px 24px -12px rgba(19,36,46,.14);
+  --shadow-soft:0 1px 2px rgba(19,36,46,.05);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:'Hanken Grotesk',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.45;}
+button{font-family:inherit;cursor:pointer;}
+input{font-family:inherit;}
+
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh;}
+
+/* ---- Sidebar ---- */
+.nav{background:#0C2128;color:#C9D6DB;padding:22px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.brand{display:flex;align-items:center;gap:12px;padding:4px 8px 22px;}
+.brand__mark{width:42px;height:42px;border-radius:11px;flex:none;background:linear-gradient(150deg,var(--brand),var(--brand-deep));display:grid;place-items:center;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:#fff;font-size:17px;box-shadow:0 4px 14px -4px rgba(14,110,122,.7);}
+.brand__txt strong{display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:14.5px;color:#fff;line-height:1.15;}
+.brand__txt span{display:block;font-size:11.5px;color:#7E929A;letter-spacing:.3px;}
+.nav__group{font-size:10.5px;text-transform:uppercase;letter-spacing:1.3px;color:#5E747D;margin:10px 10px 8px;font-weight:600;}
+.nav__item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:transparent;color:#B6C6CC;padding:11px 12px;border-radius:10px;font-size:14px;font-weight:500;margin-bottom:2px;transition:background .15s,color .15s;}
+.nav__item svg{width:18px;height:18px;flex:none;opacity:.9;}
+.nav__item:hover{background:rgba(255,255,255,.05);color:#E6EEF1;}
+.nav__item.is-active{background:var(--brand);color:#fff;box-shadow:0 4px 14px -6px rgba(14,110,122,.9);}
+.nav__item.is-soon{opacity:.5;}
+.nav__soon{margin-left:auto;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;background:rgba(255,255,255,.08);padding:2px 7px;border-radius:20px;color:#8FA3AB;}
+.nav__badge{margin-left:auto;background:var(--warn);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;font-family:'IBM Plex Mono',monospace;}
+.nav__item.is-active .nav__badge{background:rgba(255,255,255,.22);}
+.nav__foot{margin-top:auto;padding:14px 12px 4px;border-top:1px solid rgba(255,255,255,.07);font-size:11.5px;color:#7E929A;}
+.nav__sync{display:flex;align-items:center;gap:8px;}
+.dot-live{width:8px;height:8px;border-radius:50%;background:#36C28C;animation:pulse 2.4s infinite;flex:none;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(54,194,140,.55);}70%{box-shadow:0 0 0 7px rgba(54,194,140,0);}100%{box-shadow:0 0 0 0 rgba(54,194,140,0);}}
+
+/* ---- Main ---- */
+.main{padding:0;min-width:0;}
+.topbar{background:rgba(234,239,243,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5;padding:22px 34px 18px;border-bottom:1px solid var(--line);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+.topbar h1{font-family:'Bricolage Grotesque',sans-serif;font-size:25px;font-weight:700;letter-spacing:-.5px;margin:0;}
+.topbar p{margin:3px 0 0;color:var(--ink-soft);font-size:13.5px;}
+.clock{text-align:right;}
+.clock__time{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;letter-spacing:-.5px;line-height:1;}
+.clock__date{font-size:12.5px;color:var(--ink-soft);text-transform:capitalize;margin-top:3px;}
+
+.wrap{padding:24px 34px 70px;}
+
+/* ---- Summary stats ---- */
+.summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.stat{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow-soft);min-width:150px;}
+.stat__dot{width:11px;height:11px;border-radius:50%;flex:none;}
+.stat__num{font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;line-height:1;}
+.stat__lbl{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+.d-crit{background:var(--crit);}.d-warn{background:var(--warn);}.d-caut{background:var(--caut-edge);}
+
+/* ---- Toolbar (legend + refresh) ---- */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+.legend{display:flex;gap:8px;flex-wrap:wrap;}
+.legend__item{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:50px;padding:6px 13px 6px 9px;font-size:12px;color:var(--ink-soft);box-shadow:var(--shadow-soft);}
+.legend__sw{width:12px;height:12px;border-radius:4px;flex:none;}
+.legend__item b{color:var(--ink);font-weight:600;}
+.refresh-info{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--ink-soft);}
+.btn-refresh{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:8px 13px;font-size:13px;font-weight:500;box-shadow:var(--shadow-soft);}
+.btn-refresh:hover{border-color:var(--brand);color:var(--brand-deep);}
+.btn-refresh svg{width:15px;height:15px;}
+.btn-refresh.is-loading svg{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ---- Day group ---- */
+.day-head{display:flex;align-items:center;gap:12px;margin:26px 0 12px;}
+.day-head:first-child{margin-top:4px;}
+.day-head__lbl{font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--ink-soft);}
+.day-head__lbl.is-today{color:var(--brand-deep);}
+.day-head__line{flex:1;height:1px;background:var(--line);}
+.day-head__n{font-size:11.5px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;}
+
+/* ---- Appointment row ---- */
+.timeline{position:relative;}
+.appt{display:grid;grid-template-columns:104px 96px 1fr 286px 184px;align-items:stretch;gap:18px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:var(--radius);padding:14px 20px 14px 14px;margin-bottom:11px;box-shadow:var(--shadow-soft);transition:transform .12s,box-shadow .12s;}
+.appt:hover{transform:translateX(2px);box-shadow:var(--shadow);}
+.appt--crit{border-left-color:var(--crit-edge);background:linear-gradient(90deg,var(--crit-bg) 0%,var(--surface) 32%);}
+.appt--warn{border-left-color:var(--warn-edge);background:linear-gradient(90deg,var(--warn-bg) 0%,var(--surface) 32%);}
+.appt--caut{border-left-color:var(--caut-edge);background:linear-gradient(90deg,var(--caut-bg) 0%,var(--surface) 32%);}
+
+.appt__rail{display:flex;align-items:center;gap:10px;position:relative;}
+.appt__rail::before{content:"";position:absolute;left:6px;top:-22px;bottom:-22px;width:2px;background:var(--line-soft);z-index:0;}
+.appt:first-child .appt__rail::before,.day-grp .appt:first-child .appt__rail::before{top:50%;}
+.appt:last-child .appt__rail::before{bottom:50%;}
+.appt__node{width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--ink-faint);flex:none;position:relative;z-index:1;}
+.appt--crit .appt__node{border-color:var(--crit-edge);background:var(--crit);}
+.appt--warn .appt__node{border-color:var(--warn-edge);background:var(--warn);}
+.appt--caut .appt__node{border-color:var(--caut-edge);background:var(--caut-edge);}
+.appt__rel{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);}
+.appt__rel.is-now{color:var(--ink);}
+
+/* date+time calendar block */
+.when{border:1px solid var(--line);border-radius:9px;overflow:hidden;text-align:center;align-self:center;background:#fff;}
+.when__date{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--ink-soft);padding:3px 0;letter-spacing:.2px;}
+.when__time{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:500;letter-spacing:-.5px;padding:5px 0 6px;color:var(--ink);}
+
+.who{align-self:center;min-width:0;}
+.who__name{font-family:'Bricolage Grotesque',sans-serif;font-size:15.5px;font-weight:600;letter-spacing:-.2px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.who__pro{font-size:12.5px;color:var(--ink-soft);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.codes{align-self:center;display:flex;flex-direction:column;gap:7px;}
+.code-line{display:flex;align-items:flex-start;gap:8px;font-size:11px;}
+.code-line__k{text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);font-weight:600;width:64px;flex:none;padding-top:3px;}
+.code-line__v{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);font-weight:500;}
+.code-line__v.is-empty{color:var(--crit);font-weight:600;}
+.cart-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.cart-chip{font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ink);}
+.appt--crit .cart-chip{background:#fff;border-color:#EAC9CF;}
+
+.sit{align-self:center;display:flex;justify-content:flex-end;}
+.pill{display:inline-flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:12px;white-space:nowrap;text-align:right;}
+.pill__main{display:flex;align-items:center;gap:7px;}
+.pill__main::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;}
+.pill__sub{font-size:10.5px;font-weight:500;opacity:.85;}
+.pill--crit{background:var(--crit);color:#fff;}
+.pill--crit .pill__main::before{background:#fff;}
+.pill--warn{background:var(--warn-bg);color:var(--warn);border:1px solid #F3C7CF;}
+.pill--caut{background:var(--caut-bg);color:var(--caut);border:1px solid #EBD9A6;}
+
+/* ---- Bloco fixo: agendados sem guia ---- */
+.pinned{border:1.5px solid var(--crit-edge);border-radius:var(--radius);overflow:hidden;margin-bottom:26px;box-shadow:0 10px 28px -14px rgba(124,18,38,.5);}
+.pinned__head{background:var(--crit);color:#fff;padding:13px 18px;display:flex;align-items:center;gap:12px;}
+.pinned__head svg{width:20px;height:20px;flex:none;}
+.pinned__head strong{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:700;}
+.pinned__head span{font-size:12px;opacity:.85;}
+.pinned__count{background:rgba(255,255,255,.22);border-radius:20px;padding:2px 11px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;flex:none;}
+.pinned__body{background:#FBEFF1;padding:14px 14px 3px;}
+.pinned__body .appt{margin-bottom:11px;}
+.pinned__body .appt__rail::before{display:none;}
+
+/* ---- States ---- */
+.state{text-align:center;padding:64px 20px;color:var(--ink-faint);}
+.state svg{width:48px;height:48px;opacity:.45;margin-bottom:14px;}
+.state h3{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;color:var(--ink-soft);margin:0 0 6px;font-weight:600;}
+.state p{font-size:14px;margin:0;max-width:420px;margin-inline:auto;line-height:1.5;}
+.state--ok svg{color:var(--ok);opacity:.7;}
+.state--err svg{color:var(--warn);opacity:.7;}
+
+/* ---- Config bar ---- */
+.cfg{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:20px;}
+.cfg h3{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;margin:0 0 4px;}
+.cfg p{font-size:13px;color:var(--ink-soft);margin:0 0 16px;line-height:1.5;}
+.cfg__row{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;}
+.cfg__field label{display:block;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);margin-bottom:6px;}
+.cfg__field input{width:100%;border:1.5px solid var(--line);background:var(--surface-2);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+.cfg__field input:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(14,110,122,.1);}
+.cfg__btn{border:0;border-radius:9px;padding:12px 22px;font-size:14px;font-weight:600;background:var(--brand);color:#fff;height:44px;}
+.cfg__btn:hover{background:var(--brand-deep);}
+.cfg__note{font-size:11.5px;color:var(--ink-faint);margin-top:12px;line-height:1.5;}
+
+@media(max-width:1080px){
+  .appt{grid-template-columns:88px 1fr 184px;grid-template-areas:"rail who sit" "rail codes sit";gap:10px 16px;}
+  .when{display:none;}
+  .appt__rail{grid-area:rail;}.who{grid-area:who;}.codes{grid-area:codes;}.sit{grid-area:sit;}
+  .who__name{white-space:normal;}
+}
+@media(max-width:860px){
+  .app{grid-template-columns:1fr;}
+  .nav{position:static;height:auto;flex-direction:row;align-items:center;flex-wrap:wrap;gap:6px;}
+  .brand{padding:4px 12px 4px 4px;}.nav__group,.nav__foot{display:none;}.nav__item{width:auto;}
+  .nav__item.is-soon{display:none;}
+  .appt{grid-template-columns:1fr;grid-template-areas:"rail" "who" "codes" "sit";}
+  .appt__rail::before{display:none;}.sit{justify-content:flex-start;}.pill{align-items:flex-start;text-align:left;}
+  .topbar,.wrap{padding-left:18px;padding-right:18px;}
+  .cfg__row{grid-template-columns:1fr;}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand">
+      <div class="brand__mark">JF</div>
+      <div class="brand__txt"><strong>Centro Médico</strong><span>Judithe Ferreira</span></div>
+    </div>
+    <div class="nav__group">Atendimento</div>
+    <button class="nav__item is-active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+      Próximos atendimentos <span class="nav__badge" id="nav-badge">—</span>
+    </button>
+    <button class="nav__item is-soon" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+      Reanálise de guia <span class="nav__soon">em breve</span>
+    </button>
+    <button class="nav__item is-soon" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.6 5.4a9 9 0 0 1 .9 11.8M5.4 5.4a9 9 0 0 0-.9 11.8"/><path d="m2 2 20 20"/></svg>
+      Não perturbe <span class="nav__soon">em breve</span>
+    </button>
+    <button class="nav__item is-soon" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+      Ficha do paciente <span class="nav__soon">em breve</span>
+    </button>
+    <div class="nav__foot">
+      <div class="nav__sync"><span class="dot-live" id="sync-dot"></span> <span id="sync-txt">aguardando conexão…</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>Próximos atendimentos</h1>
+        <p>Pacientes chegando que estão sem autorização, com poucas sessões ou com guia perto de vencer.</p>
+      </div>
+      <div class="clock">
+        <div class="clock__time" id="clock-time">--:--</div>
+        <div class="clock__date" id="clock-date">—</div>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <!-- Config (aparece só se não estiver conectado) -->
+      <div class="cfg" id="cfg" style="display:none">
+        <h3>Conectar no Supabase</h3>
+        <p>Cole a URL do projeto e a chave <b>anon</b> (em Settings → API). Só pra ler esta tela.</p>
+        <div class="cfg__row">
+          <div class="cfg__field"><label>URL do projeto</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
+          <div class="cfg__field"><label>Chave anon (public)</label><input id="cfg-key" placeholder="eyJhbGciOi..." type="password"></div>
+          <button class="cfg__btn" id="cfg-btn">Conectar</button>
+        </div>
+        <div class="cfg__note">Pra não digitar toda vez: abra o arquivo num editor e cole a URL e a chave nas duas linhas <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> lá no comecinho do script. Aí ele conecta sozinho.</div>
+      </div>
+
+      <div id="board"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ===================================================================
+   👉 PRA FIXAR A CONEXÃO: cole a URL e a chave anon aqui embaixo.
+   Se deixar em branco, a página pede no campo da tela.
+   =================================================================== */
+const SUPABASE_URL = "https://xcucoryngkkuszztpxyq.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjdWNvcnluZ2trdXN6enRweHlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5Mjg1ODYsImV4cCI6MjA5NjUwNDU4Nn0.bQ8UQshaneA3o2OSD0ek1VGtsmoF_VkN5xurSHXjeeg";
+
+const VIEW = "prov_proximos_agendamentos_unimed";
+const REFRESH_MS = 10 * 60 * 1000;   // re-busca de 10 em 10 min
+const CORTE_MIN = -60;               // some quando passou +1h (igual a view)
+
+let cfg = { url: SUPABASE_URL, key: SUPABASE_ANON_KEY };
+let dados = [];
+
+const $ = s => document.querySelector(s);
+
+/* ---------- Datas / parsing ---------- */
+function parseBR(s){ // "DD/MM/YYYY" -> Date (00:00 local) | null
+  if(!s || !/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return null;
+  const [d,m,y]=s.split('/').map(Number);
+  return new Date(y, m-1, d);
+}
+function apptDate(r){ // data_atendimento (YYYY-MM-DD) + horario (HH:MM:SS) -> Date local
+  const [y,m,d]=r.data_atendimento.split('-').map(Number);
+  const [hh,mm,ss]=(r.horario||'00:00:00').split(':').map(Number);
+  return new Date(y, m-1, d, hh, mm, ss||0);
+}
+const startOfDay = dt => new Date(dt.getFullYear(),dt.getMonth(),dt.getDate());
+function daysUntil(dt){ return Math.round((startOfDay(dt)-startOfDay(new Date()))/86400000); }
+
+/* ---------- Situação: agora VEM DA VIEW (coluna "situacao"). Aqui só viramos em cor + texto. ---------- */
+function diasVenc(r){ const v=parseBR(r.validade_senha); return v?daysUntil(v):null; }
+function venceLabel(dias){ return dias===0?'Vence hoje':dias===1?'Vence amanhã':'Vence em '+dias+' dias'; }
+function qtTxt(q){ return q+(q===1?' sessão':' sessões'); }
+function agAgo(s){ // "agendado há X dias" a partir de agendado_em
+  if(!s) return null;
+  const d=new Date(String(s).replace(' ','T'));
+  if(isNaN(d)) return null;
+  const dd=Math.floor((startOfDay(new Date())-startOfDay(d))/86400000);
+  if(dd<=0) return 'agendado hoje';
+  if(dd===1) return 'agendado ontem';
+  return 'agendado há '+dd+' dias';
+}
+function mapSituacao(r){
+  const s=(r.situacao||'').trim();
+  const qt=parseInt(r.qt_atual,10);
+  const dias=diasVenc(r);
+  switch(s){
+    case 'AGENDADO SEM GUIA':       return {sev:'crit', pinned:true, main:'Sem guia', sub:agAgo(r.agendado_em)||'agendado sem autorização'};
+    case 'SEM GUIA':                return {sev:'crit', main:'Sem guia', sub:'atende sem autorização'};
+    case 'GUIA VENCIDA':            return {sev:'crit', main:'Guia vencida', sub:'venceu '+r.validade_senha};
+    case 'VENCE EM MENOS DE 10 DIAS': return {sev:'warn', main:dias!==null?venceLabel(dias):'Vence em menos de 10 dias', sub:(!isNaN(qt)&&qt<=2)?qtTxt(qt)+' restante'+(qt===1?'':'s'):null};
+    case 'ÚLTIMA SESSÃO':           return {sev:'warn', main:'Última sessão', sub:(dias!==null&&dias<=14?'vence em '+dias+' dias':'só resta 1')};
+    case '2 SESSÕES RESTANTES':     return {sev:'caut', main:'2 sessões restantes', sub:(dias!==null&&dias<=14?'vence em '+dias+' dias':null)};
+    case 'VENCE EM 10 A 14 DIAS':   return {sev:'caut', main:dias!==null?venceLabel(dias):'Vence em 10 a 14 dias', sub:(!isNaN(qt)?qtTxt(qt)+' restantes':null)};
+    case 'OK':                      return null; // guia sobrando -> não aparece (vai ser o botão depois)
+    default:                        return {sev:'caut', main:s||'—', sub:null}; // fallback seguro p/ situação nova
+  }
+}
+
+// Vai pro topo (bloco fixo): agendado sem guia OU consulta de nutrição sem guia
+const COD_NUTRI='50000560';
+function vaiProTopo(x){ return x.m.pinned || (x.r.codigo_procedimento===COD_NUTRI && x.r.numero_guia==='sem guia'); }
+
+/* ---------- Relógio ---------- */
+function tick(){
+  const now=new Date();
+  $('#clock-time').textContent=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  $('#clock-date').textContent=now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+}
+
+/* ---------- Render ---------- */
+const WD=['dom','seg','ter','qua','qui','sex','sáb'];
+function relLabel(dt, isNext){
+  const min=Math.round((dt-new Date())/60000);
+  if(min>=CORTE_MIN && min<10) return {t:'Agora', now:true};
+  if(isNext) return {t:'Próximo', now:true};
+  if(daysUntil(dt)!==0) return {t:'', now:false};      // dia futuro: o cabeçalho do dia já diz
+  if(min<90) return {t:'em '+min+' min', now:false};
+  return {t:'em '+Math.round(min/60)+'h', now:false};
+}
+function dayLabel(dt){
+  const d=daysUntil(dt);
+  if(d===0) return {t:'Hoje', today:true};
+  if(d===1) return {t:'Amanhã', today:false};
+  return {t:WD[dt.getDay()]+' · '+dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), today:false};
+}
+
+/* ---------- monta uma linha de atendimento ---------- */
+function rowHtml(x, isNext){
+  const m=x.m, dt=x.dt;
+  const rel=relLabel(dt, isNext);
+  const dataTxt=WD[dt.getDay()]+' '+dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  const hora=dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  const temGuia=x.r.numero_guia!=='sem guia';
+  const guiaHtml=temGuia?`<span class="code-line__v">${x.r.numero_guia}</span>`:`<span class="code-line__v is-empty">nenhuma</span>`;
+
+  let cartHtml;
+  if(!x.r.carteirinha_usada || x.r.carteirinha_usada==='sem carteirinha'){
+    cartHtml='<span class="code-line__v is-empty">sem carteirinha</span>';
+  }else{
+    const carts=x.r.carteirinha_usada.split('|').map(s=>s.trim()).filter(Boolean);
+    cartHtml='<div class="cart-chips">'+carts.map(c=>`<span class="cart-chip">${c}</span>`).join('')+'</div>';
+  }
+  const cartK=(x.r.carteirinha_usada&&x.r.carteirinha_usada.includes('|'))?'carteirinhas':'carteirinha';
+
+  return `<div class="appt appt--${m.sev}">
+    <div class="appt__rail"><span class="appt__node"></span><span class="appt__rel ${rel.now?'is-now':''}">${rel.t}</span></div>
+    <div class="when"><div class="when__date">${dataTxt}</div><div class="when__time">${hora}</div></div>
+    <div class="who"><div class="who__name">${x.r.paciente}</div><div class="who__pro">${x.r.profissional||'—'} · ${x.r.procedimento||''}</div></div>
+    <div class="codes">
+      <div class="code-line"><span class="code-line__k">guia</span>${guiaHtml}</div>
+      <div class="code-line"><span class="code-line__k">${cartK}</span>${cartHtml}</div>
+    </div>
+    <div class="sit"><span class="pill pill--${m.sev}"><span class="pill__main">${m.main}</span>${m.sub?`<span class="pill__sub">${m.sub}</span>`:''}</span></div>
+  </div>`;
+}
+
+function render(){
+  const now=new Date();
+  // situação vem da view; aqui só tiramos os que já passaram +1h e o "OK" (guia sobrando)
+  let linhas = dados.map(r=>({r, dt:apptDate(r), m:mapSituacao(r)}))
+                    .filter(x=>x.m && (x.dt-now)/60000 >= CORTE_MIN);
+
+  // separa: agendado sem guia E nutrição sem guia ficam fixos no topo (independente da data); o resto vai por dia
+  const pinned = linhas.filter(vaiProTopo).sort((a,b)=>a.dt-b.dt);
+  const rest   = linhas.filter(x=>!vaiProTopo(x)).sort((a,b)=>a.dt-b.dt);
+
+  const cont={crit:0,warn:0,caut:0};
+  linhas.forEach(x=>cont[x.m.sev]++);
+  $('#nav-badge').textContent=linhas.length;
+
+  const board=$('#board');
+  if(!linhas.length){
+    board.innerHTML=`<div class="state state--ok">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-10 10.01-3-3"/></svg>
+      <h3>Tudo certo por enquanto</h3><p>Nenhum atendimento dos próximos dias precisa de atenção agora. Esta tela se atualiza sozinha a cada 10 minutos.</p></div>`;
+    return;
+  }
+
+  let html=`<div class="summary">
+    <div class="stat"><span class="stat__dot d-crit"></span><div><div class="stat__num">${cont.crit}</div><div class="stat__lbl">sem guia / vencida</div></div></div>
+    <div class="stat"><span class="stat__dot d-warn"></span><div><div class="stat__num">${cont.warn}</div><div class="stat__lbl">urgente</div></div></div>
+    <div class="stat"><span class="stat__dot d-caut"></span><div><div class="stat__num">${cont.caut}</div><div class="stat__lbl">atenção</div></div></div>
+  </div>
+  <div class="toolbar">
+    <div class="legend">
+      <div class="legend__item"><span class="legend__sw" style="background:var(--crit)"></span> <b>Sem guia ou vencida</b></div>
+      <div class="legend__item"><span class="legend__sw" style="background:var(--warn)"></span> <b>1 sessão</b> ou vence em &lt;10 dias</div>
+      <div class="legend__item"><span class="legend__sw" style="background:var(--caut-edge)"></span> <b>2 sessões</b> ou vence em 14 dias</div>
+    </div>
+    <div class="refresh-info">
+      <span id="upd">—</span>
+      <button class="btn-refresh" id="btn-refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>Atualizar</button>
+    </div>
+  </div>`;
+
+  // ----- BLOCO FIXO: agendados sem guia (só aparece quando tem) -----
+  if(pinned.length){
+    html+=`<div class="pinned">
+      <div class="pinned__head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div style="flex:1"><strong>Sem guia — resolver primeiro</strong> <span>— consultas novas e de nutrição que estão sem autorização.</span></div>
+        <span class="pinned__count">${pinned.length}</span>
+      </div>
+      <div class="pinned__body">${pinned.map(x=>rowHtml(x,false)).join('')}</div>
+    </div>`;
+  }
+
+  // ----- LISTA POR DIA: todo o resto -----
+  const nextIdx = rest.findIndex(x=>x.dt>=now);
+  let curDay=null;
+  rest.forEach((x,i)=>{
+    const dayKey=x.r.data_atendimento;
+    if(dayKey!==curDay){
+      if(curDay!==null) html+='</div>';
+      curDay=dayKey;
+      const dl=dayLabel(x.dt);
+      const n=rest.filter(y=>y.r.data_atendimento===dayKey).length;
+      html+=`<div class="day-head"><span class="day-head__lbl ${dl.today?'is-today':''}">${dl.t}</span><span class="day-head__line"></span><span class="day-head__n">${n} atend.</span></div><div class="day-grp timeline">`;
+    }
+    html+=rowHtml(x, i===nextIdx);
+  });
+  if(curDay!==null) html+='</div>';
+
+  board.innerHTML=html;
+  $('#upd').textContent='atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  $('#btn-refresh').addEventListener('click',()=>load(true));
+}
+
+/* ---------- Carregar da view ---------- */
+async function load(manual){
+  if(!cfg.url || !cfg.key){ $('#cfg').style.display='block'; return; }
+  const btn=$('#btn-refresh'); if(btn) btn.classList.add('is-loading');
+  $('#sync-txt').textContent='sincronizando…';
+  try{
+    const url=cfg.url.replace(/\/$/,'')+'/rest/v1/'+VIEW+'?select=*&order=data_hora.asc&limit=1000';
+    const res=await fetch(url,{headers:{apikey:cfg.key,Authorization:'Bearer '+cfg.key}});
+    if(!res.ok){ throw new Error('HTTP '+res.status+' — '+(res.status===401||res.status===404?'confere a URL e a chave anon (e se a view está exposta)':await res.text())); }
+    dados=await res.json();
+    $('#cfg').style.display='none';
+    render();
+    const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    $('#sync-txt').textContent='atualizado '+t;
+  }catch(err){
+    $('#sync-txt').textContent='erro de conexão';
+    $('#board').innerHTML=`<div class="state state--err">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <h3>Não consegui carregar</h3><p>${err.message}</p></div>`;
+    $('#cfg').style.display='block';
+  }finally{
+    if(btn) btn.classList.remove('is-loading');
+  }
+}
+
+/* ---------- Boot ---------- */
+$('#cfg-btn').addEventListener('click',()=>{
+  cfg.url=$('#cfg-url').value.trim();
+  cfg.key=$('#cfg-key').value.trim();
+  if(cfg.url && cfg.key) load(true);
+});
+tick(); setInterval(tick,15000);
+setInterval(()=>{ if(dados.length) render(); }, 60000); // re-render por minuto (some os que passaram + atualiza "em Xh")
+setInterval(()=>load(false), REFRESH_MS);               // re-busca de 10 em 10 min
+load(false);
+</script>
+</body>
+</html>
