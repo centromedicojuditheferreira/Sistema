@@ -299,13 +299,16 @@ function mapSituacao(r){
   }
 }
 
-// Vai pro topo (bloco fixo): agendado sem guia OU consulta de nutrição sem guia
-// Vai pro topo (bloco fixo): sem guia, OU guia que vence ANTES do dia da consulta
-// (validade < data do atendimento já cobre também a guia vencida, pois a consulta é hoje ou futura)
+// Vai pro topo (bloco fixo): sem guia, OU guia que vence antes do dia da consulta.
+// Nutri (50000560): sessão única, com 7 dias de tolerância no vencimento — mesma
+// régua da view (que já marca essas guias como OK, então elas somem do painel).
 function vaiProTopo(x){
   if(x.r.numero_guia==='sem guia') return true;
   const val=parseBR(x.r.validade_senha);
-  return val ? (val < startOfDay(x.dt)) : false;
+  if(!val) return false;
+  const limite=startOfDay(x.dt);
+  if(x.r.codigo_procedimento==='50000560') limite.setDate(limite.getDate()-7);
+  return val < limite;
 }
 
 /* ---------- Relógio (pequeno, na barra do topo) ---------- */
