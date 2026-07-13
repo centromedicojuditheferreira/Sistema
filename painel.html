@@ -249,6 +249,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const VIEW = "prov_proximos_agendamentos_unimed";
 const REFRESH_MS = 10 * 60 * 1000;   // re-busca de 10 em 10 min
 const CORTE_MIN = -60;               // some quando passou +1h (igual a view)
+const JANELA_TOPO_DIAS  = 7;         // bloco fixo: pendências só até 7 dias à frente
+const JANELA_TOPO_NUTRI = 21;        // nutrição (50000560) tem janela maior: 21 dias
 
 let cfg = { url: SUPABASE_URL, key: SUPABASE_ANON_KEY };
 let dados = [];
@@ -309,6 +311,14 @@ function vaiProTopo(x){
   const limite=startOfDay(x.dt);
   if(x.r.codigo_procedimento==='50000560') limite.setDate(limite.getDate()-7);
   return val < limite;
+}
+
+// Janela do bloco fixo: a pendência só sobe pro topo se o atendimento for dentro
+// dos próximos 7 dias — ou 21 dias no caso da nutrição (50000560). Fora disso ela
+// não some: desce pra lista por dia lá embaixo.
+function dentroDaJanelaTopo(x){
+  const janela = x.r.codigo_procedimento==='50000560' ? JANELA_TOPO_NUTRI : JANELA_TOPO_DIAS;
+  return daysUntil(x.dt) <= janela;
 }
 
 /* ---------- Relógio (pequeno, na barra do topo) ---------- */
@@ -373,9 +383,12 @@ function render(){
   let linhas = dados.map(r=>({r, dt:apptDate(r), m:mapSituacao(r)}))
                     .filter(x=>x.m && (x.dt-now)/60000 >= CORTE_MIN);
 
-  // separa: agendado sem guia E nutrição sem guia ficam fixos no topo (independente da data); o resto vai por dia
-  const pinned = linhas.filter(vaiProTopo).sort((a,b)=>a.dt-b.dt);
-  const rest   = linhas.filter(x=>!vaiProTopo(x)).sort((a,b)=>a.dt-b.dt);
+  // separa: pendência (sem guia / guia vence antes da consulta) sobe pro topo, mas
+  // só dentro da janela (7 dias; 21 pra nutrição). O resto — e as pendências fora
+  // da janela — descem pra lista por dia.
+  const noTopo = x => vaiProTopo(x) && dentroDaJanelaTopo(x);
+  const pinned = linhas.filter(noTopo).sort((a,b)=>a.dt-b.dt);
+  const rest   = linhas.filter(x=>!noTopo(x)).sort((a,b)=>a.dt-b.dt);
 
   const cont={crit:0,warn:0,caut:0};
   linhas.forEach(x=>cont[x.m.sev]++);
