@@ -172,7 +172,10 @@
   .setup h2{font:800 19px 'Archivo';margin-bottom:4px}
   .setup p{font-size:13px;color:var(--neutro);margin-bottom:16px}
   .setup label{font:700 12px 'Public Sans';text-transform:uppercase;letter-spacing:.5px;color:var(--tinta-2);display:block;margin:12px 0 4px}
-  .setup input{width:100%;padding:10px 12px;border:1.5px solid var(--linha);border-radius:8px;font:500 13px 'IBM Plex Mono'}
+  .setup input,.setup select{width:100%;padding:10px 12px;border:1.5px solid var(--linha);border-radius:8px;font:500 13px 'IBM Plex Mono';background:#fff;color:var(--tinta)}
+  .setup select{font-family:'Public Sans';font-weight:600;cursor:pointer}
+  .login-erro{background:var(--critico-fundo);color:var(--critico);border-radius:8px;padding:9px 12px;font:600 12.5px 'Public Sans';margin-top:12px}
+  .quem-sou{font:700 12px 'Public Sans';background:rgba(255,255,255,.16);border-radius:999px;padding:5px 11px}
   .setup .btn{background:var(--ok);margin-top:18px;width:100%;padding:11px}
   .setup .btn:hover{background:#08624a}
 
@@ -215,8 +218,10 @@
     <div class="topo-dir">
       <input class="busca" id="busca" type="search" placeholder="Buscar paciente…" aria-label="Buscar paciente">
       <span class="atualizado" id="atualizado">—</span>
+      <span class="quem-sou" id="quemSou"></span>
       <button class="btn" id="btnAtualizar" title="Recarregar do banco">↻ Atualizar</button>
       <button class="btn" id="btnAdmin" title="Relatórios do dono">👑 Dono</button>
+      <button class="btn" id="btnSair" title="Sair">Sair</button>
     </div>
   </div>
   <div class="regua" id="regua" role="tablist" aria-label="Dias"></div>
@@ -229,19 +234,33 @@
    CONFIGURAÇÃO — cole aqui antes de publicar no GitHub Pages.
    (Se deixar vazio, o painel pede na primeira abertura e tenta lembrar.)
    ═════════════════════════════════════════════════════════════════════ */
-var SUPABASE_URL = "";        // ex.: https://xxxxx.supabase.co
-var SUPABASE_KEY = "";        // a anon key (mesma do painel-supabase.html)
-var ADMIN_PIN    = "9010";    // PIN da "Visão do dono" — troque se quiser.
-                              // (é cadeado de portão, não cofre: separa a tela,
-                              //  não os dados — o endurecimento de verdade é o B10)
+/* ═════════════════════════════════════════════════════════════════════
+   1) CONEXÃO — preencha as duas linhas abaixo ANTES de publicar.
+      Assim as secretárias nunca veem nada de banco: só o login.
+   ═════════════════════════════════════════════════════════════════════ */
+var SUPABASE_URL = "https://xcucoryngkkuszztpxyq.supabase.co";
+var SUPABASE_KEY = "COLE_AQUI_A_CHAVE_sb_publishable";   // ⚠️ Settings → API Keys
+
+/* ═════════════════════════════════════════════════════════════════════
+   2) QUEM ENTRA — uma linha por pessoa. Edite à vontade: some, tire,
+      troque senha. Quem tem dono:true enxerga o botão 👑 Visão do dono.
+      (Isto é controle de acesso da TELA, não do banco — o endurecimento
+       de verdade continua sendo a pendência B10.)
+   ═════════════════════════════════════════════════════════════════════ */
+var USUARIOS = [
+  { nome: "Gabriel",  senha: "trocar9010", dono: true  },
+  { nome: "Marina",   senha: "trocar1111"              },
+  { nome: "Paula",    senha: "trocar2222"              },
+  { nome: "Recepção", senha: "trocar3333"              }
+];
 
 /* ── memória local à prova de ambiente sem localStorage ── */
 function lembrar(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 function lembrado(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return ""; } }
+function esquecer(k){ try{ localStorage.removeItem(k); }catch(e){} }
 
-/* Herança do painel-supabase.html: se ele já foi configurado neste computador
-   (mesmo domínio do GitHub Pages), aproveita a conexão salva em sbpanel:conn
-   e ninguém precisa digitar nada de novo. */
+/* Se por algum motivo a chave não foi preenchida acima, tenta herdar a
+   conexão já salva pelo painel-supabase.html neste mesmo navegador. */
 function herdarConexaoAntiga(){
   try {
     var c = JSON.parse(localStorage.getItem("sbpanel:conn") || "null");
@@ -249,12 +268,14 @@ function herdarConexaoAntiga(){
   } catch(e) {}
   return null;
 }
-var herdada = herdarConexaoAntiga();
+var chaveOk = SUPABASE_KEY && SUPABASE_KEY.indexOf("COLE_AQUI") < 0;
+var herdada = chaveOk ? null : herdarConexaoAntiga();
 
 var CFG = {
-  url: SUPABASE_URL || lembrado("pga_url") || (herdada ? herdada.url : ""),
-  key: SUPABASE_KEY || lembrado("pga_key") || (herdada ? herdada.key : ""),
-  autora: lembrado("pga_autora")
+  url: (chaveOk ? SUPABASE_URL : (herdada ? herdada.url : SUPABASE_URL)).replace(/\/+$/,""),
+  key: (chaveOk ? SUPABASE_KEY : (herdada ? herdada.key : "")),
+  autora: lembrado("pga_autora"),
+  dono: lembrado("pga_dono") === "1"
 };
 
 /* ── dicionário das situações (voz da recepção) ── */
@@ -514,15 +535,8 @@ function cardDe(l){
 }
 
 /* ═══ visão do dono (v1.1) ═══ */
-var admLiberado = false;   // pede o PIN uma vez por sessão
-
 function abrirAdmin(){
-  if(!admLiberado){
-    var pin = prompt("PIN da visão do dono:");
-    if(pin === null) return;
-    if(pin.trim() !== ADMIN_PIN){ alert("PIN incorreto."); return; }
-    admLiberado = true;
-  }
+  if(!CFG.dono){ alert("Esta área é do administrador."); return; }
   desenharAdmin();
 }
 function buscarAdmin(){
@@ -641,41 +655,66 @@ function desenharAdmin(){
   });
 }
 
-/* ═══ setup na primeira vez ═══ */
-function telaSetup(){
+/* ═══ login ═══ */
+function telaLogin(erro){
   var main = document.getElementById("conteudo");
+  document.getElementById("cabecalho").hidden = true;
+  var opcoes = USUARIOS.map(function(u){
+    return '<option value="'+escapa(u.nome)+'">'+escapa(u.nome)+'</option>';
+  }).join("");
   main.innerHTML =
-    '<div class="setup"><h2>Ligar o painel ao banco</h2>'+
-    '<p>Cole a URL e a anon key do Supabase (as mesmas do painel-supabase.html). Fica salvo neste computador.</p>'+
-    '<label>URL do Supabase</label><input id="su" placeholder="https://xxxxx.supabase.co" value="'+escapa(CFG.url)+'">'+
-    '<label>Anon key</label><input id="sk" placeholder="eyJhbGciOi…" value="'+escapa(CFG.key)+'">'+
-    '<label>Seu nome (assina as anotações)</label><input id="sa" placeholder="ex.: Marina" value="'+escapa(CFG.autora)+'">'+
-    '<button class="btn" id="sb">Entrar</button></div>';
-  document.getElementById("sb").onclick = function(){
-    CFG.url = document.getElementById("su").value.trim().replace(/\/+$/,"");
-    CFG.key = document.getElementById("sk").value.trim();
-    CFG.autora = document.getElementById("sa").value.trim();
-    if(!CFG.url || !CFG.key){ alert("Preencha URL e key."); return; }
-    lembrar("pga_url", CFG.url); lembrar("pga_key", CFG.key); lembrar("pga_autora", CFG.autora);
+    '<div class="setup"><h2>Guias da Agenda</h2>'+
+    '<p>Entre com seu nome e senha. Suas anotações no painel ficam assinadas com ele.</p>'+
+    (erro ? '<div class="login-erro">'+escapa(erro)+'</div>' : '')+
+    '<label>Quem é você</label><select id="lgNome">'+opcoes+'</select>'+
+    '<label>Senha</label><input id="lgSenha" type="password" placeholder="••••••" autocomplete="current-password">'+
+    '<button class="btn" id="lgEntrar">Entrar</button></div>';
+
+  var campo = document.getElementById("lgSenha");
+  var salvo = lembrado("pga_autora");
+  if(salvo) document.getElementById("lgNome").value = salvo;
+  campo.focus();
+  campo.addEventListener("keydown", function(ev){ if(ev.key === "Enter") tentar(); });
+  document.getElementById("lgEntrar").onclick = tentar;
+
+  function tentar(){
+    var nome = document.getElementById("lgNome").value;
+    var senha = campo.value;
+    var u = USUARIOS.filter(function(x){ return x.nome === nome; })[0];
+    if(!u || senha !== u.senha){ telaLogin("Senha incorreta. Tente de novo."); return; }
+    CFG.autora = u.nome;
+    CFG.dono = !!u.dono;
+    lembrar("pga_autora", CFG.autora);
+    lembrar("pga_dono", CFG.dono ? "1" : "0");
     iniciar();
-  };
+  }
+}
+function sair(){
+  esquecer("pga_dono");
+  CFG.dono = false;
+  telaLogin();
 }
 function iniciar(){
-  document.getElementById("cabecalho").hidden = false;
-  if(!CFG.autora){
-    var n = prompt("Seu nome (assina as anotações do painel):", "");
-    if(n){ CFG.autora = n.trim(); lembrar("pga_autora", CFG.autora); }
+  if(!CFG.key){
+    document.getElementById("conteudo").innerHTML =
+      '<div class="erro">O painel não foi publicado com a chave do banco.<br>'+
+      'Abra o arquivo e preencha <span class="mono">SUPABASE_KEY</span> no topo.</div>';
+    return;
   }
+  document.getElementById("cabecalho").hidden = false;
+  document.getElementById("btnAdmin").style.display = CFG.dono ? "" : "none";
+  document.getElementById("quemSou").textContent = CFG.autora;
   carregar();
-  setInterval(carregar, 5*60*1000);   // auto-atualiza a cada 5 min
+  if(!window._pgaTimer) window._pgaTimer = setInterval(carregar, 5*60*1000);  // auto-atualiza
 }
 document.getElementById("btnAtualizar").addEventListener("click", carregar);
 document.getElementById("btnAdmin").addEventListener("click", abrirAdmin);
+document.getElementById("btnSair").addEventListener("click", sair);
 document.getElementById("busca").addEventListener("input", function(e){
   estado.busca = e.target.value.trim().toLowerCase(); desenhar();
 });
 
-if(CFG.url && CFG.key){ iniciar(); } else { telaSetup(); }
+telaLogin();   // o painel sempre começa pelo login
 </script>
 </body>
 </html>
