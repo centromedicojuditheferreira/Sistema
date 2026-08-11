@@ -238,7 +238,7 @@
    1) CONEXÃO — preencha as duas linhas abaixo ANTES de publicar.
       Assim as secretárias nunca veem nada de banco: só o login.
    ═════════════════════════════════════════════════════════════════════ */
-var SUPABASE_URL = "https://xcucoryngkkuszztpxyq.supabase.co";
+var SUPABASE_URL = "https://SEU-PROJETO.supabase.co";        // ⚠️ Settings → API → Project URL
 var SUPABASE_KEY = "COLE_AQUI_A_CHAVE_sb_publishable";   // ⚠️ Settings → API Keys
 
 /* ═════════════════════════════════════════════════════════════════════
@@ -316,8 +316,12 @@ function carregar(){
     })
     .then(function(dados){
       estado.linhas = dados;
+      var tela = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+      var regua = (dados[0] && dados[0].calculado_em)
+        ? new Date(dados[0].calculado_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
+        : null;
       document.getElementById("atualizado").textContent =
-        "atualizado às " + new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        regua ? ("régua das " + regua + " · tela " + tela) : ("atualizado às " + tela);
       desenhar();
     })
     .catch(function(e){
@@ -438,7 +442,8 @@ function detalheDe(l){
   if(l.situacao==="coberto")
     m.push('guia <span class="mono">'+escapa(l.numero_guia)+'</span> · '+l.saldo_guia+' sessão(ões) · vence '+escapa(l.guia_fim_fmt));
   if(l.situacao==="guia_vencida")
-    m.push('última guia <span class="mono">'+escapa(l.numero_guia||"—")+'</span> venceu em '+escapa(l.guia_fim_fmt||"—"));
+    m.push('última guia <span class="mono">'+escapa(l.numero_guia||"—")+'</span> venceu em '+escapa(l.guia_fim_fmt||"—")+
+           (typeof l.dias_para_vencer==="number" ? ' <b>(há '+Math.abs(l.dias_para_vencer)+' dia'+(Math.abs(l.dias_para_vencer)===1?'':'s')+')</b>' : ''));
   if(l.situacao==="saldo_esgotado")
     m.push('guia <span class="mono">'+escapa(l.numero_guia)+'</span> vale até '+escapa(l.guia_fim_fmt)+', mas zerou');
   if(l.situacao==="sem_saldo_na_fila")
