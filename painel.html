@@ -242,16 +242,18 @@ var SUPABASE_URL = "https://SEU-PROJETO.supabase.co";        // ⚠️ Settings 
 var SUPABASE_KEY = "COLE_AQUI_A_CHAVE_sb_publishable";   // ⚠️ Settings → API Keys
 
 /* ═════════════════════════════════════════════════════════════════════
-   2) QUEM ENTRA — uma linha por pessoa. Edite à vontade: some, tire,
-      troque senha. Quem tem dono:true enxerga o botão 👑 Visão do dono.
-      (Isto é controle de acesso da TELA, não do banco — o endurecimento
-       de verdade continua sendo a pendência B10.)
+   2) QUEM ENTRA — uma linha por pessoa. Quem tem dono:true enxerga o
+      botão 👑 Visão do dono. SEM SENHA por enquanto: é só escolher o
+      nome. Pra cobrar senha de alguém no futuro, acrescente o campo:
+        { nome: "Marina", senha: "minhasenha" }
+      (Isto é controle da TELA, não do banco — o endurecimento de
+       verdade continua sendo a pendência B10.)
    ═════════════════════════════════════════════════════════════════════ */
 var USUARIOS = [
-  { nome: "Gabriel",  senha: "trocar9010", dono: true  },
-  { nome: "Marina",   senha: "trocar1111"              },
-  { nome: "Paula",    senha: "trocar2222"              },
-  { nome: "Recepção", senha: "trocar3333"              }
+  { nome: "Gabriel",  dono: true },
+  { nome: "Marina"  },
+  { nome: "Paula"   },
+  { nome: "Recepção" }
 ];
 
 /* ── memória local à prova de ambiente sem localStorage ── */
@@ -669,24 +671,32 @@ function telaLogin(erro){
   }).join("");
   main.innerHTML =
     '<div class="setup"><h2>Guias da Agenda</h2>'+
-    '<p>Entre com seu nome e senha. Suas anotações no painel ficam assinadas com ele.</p>'+
+    '<p>Escolha seu nome pra entrar. Suas anotações no painel ficam assinadas com ele.</p>'+
     (erro ? '<div class="login-erro">'+escapa(erro)+'</div>' : '')+
     '<label>Quem é você</label><select id="lgNome">'+opcoes+'</select>'+
-    '<label>Senha</label><input id="lgSenha" type="password" placeholder="••••••" autocomplete="current-password">'+
+    '<div id="lgSenhaBox" style="display:none"><label>Senha</label>'+
+    '<input id="lgSenha" type="password" placeholder="••••••" autocomplete="current-password"></div>'+
     '<button class="btn" id="lgEntrar">Entrar</button></div>';
 
+  var selNome = document.getElementById("lgNome");
   var campo = document.getElementById("lgSenha");
   var salvo = lembrado("pga_autora");
-  if(salvo) document.getElementById("lgNome").value = salvo;
-  campo.focus();
+  if(salvo && USUARIOS.some(function(u){ return u.nome === salvo; })) selNome.value = salvo;
+
+  function acharUsuario(){ return USUARIOS.filter(function(x){ return x.nome === selNome.value; })[0]; }
+  function ajustaSenha(){   // só mostra o campo se ESSA pessoa tiver senha definida
+    var u = acharUsuario();
+    document.getElementById("lgSenhaBox").style.display = (u && u.senha) ? "" : "none";
+  }
+  ajustaSenha();
+  selNome.addEventListener("change", ajustaSenha);
   campo.addEventListener("keydown", function(ev){ if(ev.key === "Enter") tentar(); });
   document.getElementById("lgEntrar").onclick = tentar;
 
   function tentar(){
-    var nome = document.getElementById("lgNome").value;
-    var senha = campo.value;
-    var u = USUARIOS.filter(function(x){ return x.nome === nome; })[0];
-    if(!u || senha !== u.senha){ telaLogin("Senha incorreta. Tente de novo."); return; }
+    var u = acharUsuario();
+    if(!u){ telaLogin("Escolha um nome da lista."); return; }
+    if(u.senha && campo.value !== u.senha){ telaLogin("Senha incorreta. Tente de novo."); return; }
     CFG.autora = u.nome;
     CFG.dono = !!u.dono;
     lembrar("pga_autora", CFG.autora);
