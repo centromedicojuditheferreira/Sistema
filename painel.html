@@ -179,6 +179,49 @@
   .setup .btn{background:var(--ok);margin-top:18px;width:100%;padding:11px}
   .setup .btn:hover{background:#08624a}
 
+  /* ── abas Agenda | Recaptação ── */
+  .abas{display:flex;gap:6px;max-width:1180px;margin:0 auto;padding-bottom:12px}
+  .aba{
+    border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);
+    color:#EAF1EE;border-radius:9px;padding:7px 16px;font:700 13px 'Archivo';
+    letter-spacing:.3px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  }
+  .aba.on{background:#F2F6F4;color:var(--tinta);border-color:#F2F6F4}
+  .aba .b{min-width:20px;height:20px;border-radius:10px;background:var(--critico);
+    color:#fff;font:700 11px/20px 'Archivo';padding:0 6px;text-align:center}
+  .aba .b.zero{background:var(--ok)}
+
+  /* ── cards de recaptação ── */
+  .rcard{
+    background:var(--cartao);border:1px solid var(--linha);border-left:6px solid var(--neutro);
+    border-radius:10px;box-shadow:var(--sombra);padding:12px 14px;margin-bottom:10px;
+  }
+  .rcard.u0{border-left-color:var(--ok)}
+  .rcard.u1{border-left-color:var(--alerta)}
+  .rcard.u2{border-left-color:var(--critico)}
+  .rcard.u3{border-left-color:var(--critico);box-shadow:0 0 0 2px var(--critico-fundo), var(--sombra)}
+  .rtopo{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .rtopo .nome{font:700 15.5px 'Public Sans'}
+  .rtopo .bucket{font:700 11px 'Archivo';text-transform:uppercase;letter-spacing:.5px;color:var(--tinta-2);
+    background:var(--papel);border:1px solid var(--linha);border-radius:6px;padding:2px 7px}
+  .urg{margin-left:auto;font:700 12px 'Public Sans';border-radius:7px;padding:4px 10px}
+  .urg.u0{background:var(--ok-fundo);color:var(--ok)}
+  .urg.u1{background:var(--alerta-fundo);color:var(--alerta)}
+  .urg.u2,.urg.u3{background:var(--critico-fundo);color:var(--critico)}
+  .rmeta{font-size:12.5px;color:var(--neutro);margin-top:4px}
+  .rmeta b{color:var(--tinta-2)}
+  .rcontato{font-size:12.5px;margin-top:6px;padding:7px 10px;background:var(--papel);
+    border:1px dashed var(--linha);border-radius:8px}
+  .racoes{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;
+    border-top:1px dashed var(--linha);padding-top:9px}
+  .racoes select,.racoes input{font:600 12.5px 'Public Sans';padding:6px 8px;
+    border:1.5px solid var(--linha);border-radius:7px;background:#fff}
+  .racoes input.rnota{flex:1;min-width:150px;font-weight:500}
+  .btn-mini{font:700 12px 'Public Sans';border:0;border-radius:7px;cursor:pointer;
+    padding:7px 12px;background:var(--ok);color:#fff}
+  .btn-mini.cinza{background:var(--neutro)}
+  .btn-mini:hover{filter:brightness(.92)}
+
   /* ── visão do dono ── */
   .adm-titulo{display:flex;align-items:center;gap:12px;margin:4px 0 14px}
   .adm-titulo h2{font:800 19px 'Archivo';letter-spacing:-.3px}
@@ -223,6 +266,10 @@
       <button class="btn" id="btnAdmin" title="Relatórios do dono">👑 Dono</button>
       <button class="btn" id="btnSair" title="Sair">Sair</button>
     </div>
+  </div>
+  <div class="abas">
+    <button class="aba on" id="abaAgenda">📅 Agenda <span class="b zero" id="abaAgendaBadge">0</span></button>
+    <button class="aba" id="abaRecap">🔄 Recaptação <span class="b zero" id="abaRecapBadge">0</span></button>
   </div>
   <div class="regua" id="regua" role="tablist" aria-label="Dias"></div>
 </header>
@@ -300,7 +347,17 @@ var TRATAMENTOS = [
 ];
 var DSEM = ["dom","seg","ter","qua","qui","sex","sáb"];
 
-var estado = { linhas: [], filtroDia: null, filtroSit: "pendencias", busca: "" };
+var estado = { linhas: [], filtroDia: null, filtroSit: "pendencias", busca: "",
+               aba: "agenda", recap: [] };
+var RESULTADOS_CONTATO = [
+  ["falei_renovando","Falei — providenciando guia"],
+  ["nao_atendeu","Não atendeu"],
+  ["vai_pensar","Vai pensar / retornar"],
+  ["reagendou","Reagendou (aguardando aparecer)"],
+  ["outro","Outro"]
+];
+var MOTIVOS_RECAP = { guia_vencida:"Guia vencida", sem_guia:"Sem guia", desmarcado_painel:"Desmarcada no painel" };
+var URG_ROTULO = ["contato em dia","2+ dias sem contato — ligar","4+ dias — insistir","6+ dias — URGENTE"];
 
 /* ═══ REST helpers ═══ */
 function cab(extra){
@@ -308,9 +365,23 @@ function cab(extra){
   for (var k in (extra||{})) h[k] = extra[k];
   return h;
 }
+function carregarRecap(){
+  return fetch(CFG.url + "/rest/v1/recap_painel?select=*", { headers: cab() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(d){ estado.recap = d; atualizaBadges(); })
+    .catch(function(){ estado.recap = []; });
+}
+function atualizaBadges(){
+  var pend = estado.linhas.filter(ehPendencia).length;
+  var bA = document.getElementById("abaAgendaBadge");
+  bA.textContent = pend; bA.className = "b" + (pend ? "" : " zero");
+  var bR = document.getElementById("abaRecapBadge");
+  bR.textContent = estado.recap.length; bR.className = "b" + (estado.recap.length ? "" : " zero");
+}
 function carregar(){
   var main = document.getElementById("conteudo");
   main.innerHTML = '<div class="carregando">Buscando a agenda no banco…</div>';
+  carregarRecap();
   fetch(CFG.url + "/rest/v1/pre_agenda_cobertura?select=*", { headers: cab() })
     .then(function(r){
       if(!r.ok) throw new Error("HTTP " + r.status + " — confira URL/key e se o 08_SQL_PRE_E_CONF.sql já rodou.");
@@ -324,6 +395,7 @@ function carregar(){
         : null;
       document.getElementById("atualizado").textContent =
         regua ? ("régua das " + regua + " · tela " + tela) : ("atualizado às " + tela);
+      atualizaBadges();
       desenhar();
     })
     .catch(function(e){
@@ -373,9 +445,106 @@ function foneBonito(n){ // 5562999990001 → (62) 99999-0001
 
 /* ═══ desenho ═══ */
 function desenhar(){
+  document.getElementById("abaAgenda").className = "aba" + (estado.aba==="agenda" ? " on" : "");
+  document.getElementById("abaRecap").className  = "aba" + (estado.aba==="recap"  ? " on" : "");
+  document.getElementById("regua").style.display = estado.aba==="agenda" ? "" : "none";
+  if(estado.aba === "recap"){ desenharRecap(); return; }
   desenharRegua();
   desenharFiltros();
   desenharLista();
+}
+
+/* ═══ 🔄 RECAPTAÇÃO — a pasta de quem saiu da agenda ═══ */
+function desenharRecap(){
+  var main = document.getElementById("conteudo");
+  main.innerHTML = "";
+  var intro = document.createElement("div");
+  intro.style.cssText = "font-size:13px;color:var(--neutro);margin:2px 0 14px";
+  intro.innerHTML = "Pacientes que <b>saíram da agenda</b> por pendência de guia. Ligue, registre o contato — a urgência sobe a cada 2 dias sem registro. Quando o paciente voltar pra agenda, o caso <b>fecha sozinho</b>.";
+  main.appendChild(intro);
+  var lista = estado.recap.filter(function(r){
+    return !estado.busca || (r.paciente_nome||"").toLowerCase().indexOf(estado.busca) >= 0;
+  });
+  if(!lista.length){
+    var v = document.createElement("div"); v.className = "vazio";
+    v.innerHTML = "<b>Pasta vazia ✔</b>Ninguém aguardando recaptação" + (estado.busca ? " com essa busca." : ".");
+    main.appendChild(v); return;
+  }
+  lista.forEach(function(r){ main.appendChild(rcardDe(r)); });
+}
+function rcardDe(r){
+  var u = Math.min(3, r.nivel_urgencia || 0);
+  var card = document.createElement("article");
+  card.className = "rcard u" + u;
+  var cel = primeiroCelular(r.celulares_raw, r.telefones_raw);
+  var motivoTxt = MOTIVOS_RECAP[r.motivo] || r.motivo;
+  var ctxGuia = r.motivo === "guia_vencida" && r.ultima_guia
+    ? ' · guia <span class="mono">' + escapa(r.ultima_guia) + '</span> venceu em ' + escapa(r.guia_venceu_fmt || "—")
+    : "";
+  card.innerHTML =
+    '<div class="rtopo"><span class="nome">' + escapa(r.paciente_nome) + '</span>' +
+    '<span class="bucket">' + escapa(r.bucket) + '</span>' +
+    '<span class="urg u'+u+'">' + escapa(URG_ROTULO[u]) + (r.dias_sem_contato>0 ? " · "+r.dias_sem_contato+"d" : "") + '</span></div>' +
+    '<div class="rmeta"><b>' + escapa(motivoTxt) + '</b>' + ctxGuia +
+    ' · última consulta ' + escapa(r.ultima_consulta_fmt || "—") +
+    ' · <b>' + r.dias_na_fila + 'd</b> fora da agenda · expira em ' + Math.max(0, r.dias_ate_expirar) + 'd</div>';
+  if(r.ultimo_contato_em){
+    var uc = document.createElement("div"); uc.className = "rcontato";
+    uc.innerHTML = '☎️ Último contato <b>' + escapa(r.ultimo_contato_fmt) + '</b> por <b>' +
+      escapa(r.ultimo_contato_autora || "—") + '</b> — ' +
+      escapa((RESULTADOS_CONTATO.filter(function(x){return x[0]===r.ultimo_contato_resultado;})[0]||[0,r.ultimo_contato_resultado||"—"])[1]) +
+      (r.ultimo_contato_nota ? ' · <i>"' + escapa(r.ultimo_contato_nota) + '"</i>' : '') +
+      ' <small>(' + r.total_contatos + ' contato' + (r.total_contatos>1?'s':'') + ')</small>';
+    card.appendChild(uc);
+  }
+  var ac = document.createElement("div"); ac.className = "racoes";
+  if(cel){
+    var wa = document.createElement("a"); wa.className = "fone"; wa.target = "_blank"; wa.rel = "noopener";
+    wa.href = "https://wa.me/" + cel; wa.innerHTML = "🟢 " + escapa(foneBonito(cel));
+    ac.appendChild(wa);
+  } else {
+    var sf = document.createElement("span"); sf.className = "fone"; sf.textContent = "📵 sem celular";
+    ac.appendChild(sf);
+  }
+  var sel = document.createElement("select");
+  RESULTADOS_CONTATO.forEach(function(t){
+    var o = document.createElement("option"); o.value = t[0]; o.textContent = t[1]; sel.appendChild(o);
+  });
+  var nota = document.createElement("input"); nota.className = "rnota";
+  nota.placeholder = "Como foi o contato…";
+  var btn = document.createElement("button"); btn.className = "btn-mini"; btn.textContent = "✔ Registrar contato";
+  btn.onclick = function(){
+    btn.disabled = true; btn.textContent = "salvando…";
+    fetch(CFG.url + "/rest/v1/recap_contatos", {
+      method: "POST",
+      headers: cab({ "Content-Type": "application/json", "Prefer": "return=minimal" }),
+      body: JSON.stringify([{ fila_id: r.id, autora: CFG.autora || null,
+                              resultado: sel.value, nota: nota.value.trim() || null }])
+    }).then(function(resp){
+      if(!resp.ok) throw 0;
+      carregarRecap().then(desenhar);
+    }).catch(function(){ btn.disabled = false; btn.textContent = "erro — tentar de novo"; });
+  };
+  var enc = document.createElement("select");
+  [["","Encerrar…"],["desistiu","Desistiu do tratamento"],["alta","Teve alta"]].forEach(function(t){
+    var o = document.createElement("option"); o.value = t[0]; o.textContent = t[1]; enc.appendChild(o);
+  });
+  enc.onchange = function(){
+    if(!enc.value) return;
+    if(!confirm("Encerrar o caso de " + r.paciente_nome + " como \"" + enc.options[enc.selectedIndex].text + "\"?")){ enc.value = ""; return; }
+    fetch(CFG.url + "/rest/v1/recap_fila?id=eq." + r.id, {
+      method: "PATCH",
+      headers: cab({ "Content-Type": "application/json", "Prefer": "return=minimal" }),
+      body: JSON.stringify({ status: enc.value, encerrado_em: new Date().toISOString(),
+                             encerrado_motivo: "encerrado no painel por " + (CFG.autora || "?") })
+    }).then(function(resp){
+      if(!resp.ok) throw 0;
+      carregarRecap().then(desenhar);
+    }).catch(function(){ alert("Não consegui encerrar — tente de novo."); enc.value = ""; });
+  };
+  ac.appendChild(sel); ac.appendChild(nota); ac.appendChild(btn); ac.appendChild(enc);
+  card.appendChild(ac);
+  return card;
 }
 function diasUnicos(){
   var m = {};
@@ -552,7 +721,8 @@ function buscarAdmin(){
   return Promise.all([
     q("/rest/v1/pre_adm_reincidencias?select=*"),
     q("/rest/v1/pre_adm_atendidas_sem_guia?select=*"),
-    q("/rest/v1/pre_agenda_notas?select=agendamento_id,tratamento,autora,atualizado_em")
+    q("/rest/v1/pre_agenda_notas?select=agendamento_id,tratamento,autora,atualizado_em"),
+    q("/rest/v1/recap_resumo_dono?select=*").then(function(x){ return x[0] || {}; })
   ]);
 }
 function resumoTexto(P, reinc, atend, notas7){
@@ -576,7 +746,7 @@ function desenharAdmin(){
   var main = document.getElementById("conteudo");
   main.innerHTML = '<div class="carregando">Montando os relatórios do dono…</div>';
   buscarAdmin().then(function(res){
-    var reinc = res[0], atendTudo = res[1], notas = res[2];
+    var reinc = res[0], atendTudo = res[1], notas = res[2], recapR = res[3] || {};
     var atend = atendTudo.filter(function(a){ return a.dias_atras <= 30; });
     var corte7 = Date.now() - 7*24*3600*1000;
     var notas7 = notas.filter(function(n){ return new Date(n.atualizado_em).getTime() >= corte7; });
@@ -606,6 +776,14 @@ function desenharAdmin(){
       '<div class="adm-card"><div class="num">'+(P.porEsp.psicologia||0)+'·'+(P.porEsp.aba||0)+'·'+(P.porEsp.nutricao||0)+'</div><div class="rot">psico · aba · nutrição</div></div>'+
     '</div>';
 
+    h += '<div class="adm-sec">🔄 Recaptação de pacientes <small>(saíram da agenda por guia · o caso fecha sozinho quando voltam)</small></div>';
+    h += '<div class="adm-cards">'+
+      '<div class="adm-card '+((recapR.ativos||0)?'ambar':'verde')+'"><div class="num">'+(recapR.ativos||0)+'</div><div class="rot">na pasta agora</div></div>'+
+      '<div class="adm-card verde"><div class="num">'+(recapR.recuperados_90d||0)+'</div><div class="rot">recuperados · 90d</div></div>'+
+      '<div class="adm-card '+((recapR.perdidos_90d||0)?'vermelho':'verde')+'"><div class="num">'+(recapR.perdidos_90d||0)+'</div><div class="rot">perdidos · 90d</div></div>'+
+      '<div class="adm-card"><div class="num">'+(recapR.taxa_recuperacao_90d!=null?recapR.taxa_recuperacao_90d+'%':'—')+'</div><div class="rot">taxa de recuperação</div></div>'+
+      '<div class="adm-card"><div class="num">'+(recapR.dias_medios_ate_recuperar!=null?recapR.dias_medios_ate_recuperar+'d':'—')+'</div><div class="rot">tempo médio p/ voltar</div></div>'+
+    '</div>';
     h += '<div class="adm-sec">🔁 Falou que resolveu — e não resolveu <small>(tratado há mais de 2h e o problema continua)</small></div>';
     if(!reinc.length){ h += '<div class="adm-vazio">Nenhuma reincidência. As meninas estão fechando o que abrem ✔</div>'; }
     else {
@@ -723,6 +901,8 @@ function iniciar(){
   if(!window._pgaTimer) window._pgaTimer = setInterval(carregar, 5*60*1000);  // auto-atualiza
 }
 document.getElementById("btnAtualizar").addEventListener("click", carregar);
+document.getElementById("abaAgenda").addEventListener("click", function(){ estado.aba="agenda"; desenhar(); });
+document.getElementById("abaRecap").addEventListener("click", function(){ estado.aba="recap"; desenhar(); });
 document.getElementById("btnAdmin").addEventListener("click", abrirAdmin);
 document.getElementById("btnSair").addEventListener("click", sair);
 document.getElementById("busca").addEventListener("input", function(e){
