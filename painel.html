@@ -80,6 +80,47 @@
   .dia .badge.zero{background:var(--ok)}
   .dia.feriado .dsem::after{content:" ✦"}
 
+  /* ── fila de reconferência (🔁 Renovações) ── */
+  .btn{position:relative}
+  .btn .nbadge{
+    position:absolute;top:-7px;right:-6px;min-width:19px;height:19px;border-radius:10px;
+    background:var(--critico);color:#fff;font:700 11px/19px 'Archivo';padding:0 5px;
+  }
+  .fila-topo{
+    background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+    box-shadow:var(--sombra);padding:16px 16px 14px;margin-bottom:18px;
+  }
+  .fila-topo h2{font:800 17px 'Archivo';letter-spacing:-.3px;margin-bottom:4px}
+  .fila-topo p{font-size:12.5px;color:var(--neutro);margin-bottom:12px;max-width:660px}
+  .fila-form{display:flex;gap:8px;flex-wrap:wrap}
+  .fila-form input{
+    flex:1;min-width:190px;font:600 15px 'IBM Plex Mono';padding:10px 12px;
+    border:1.5px solid var(--linha);border-radius:8px;background:#fff;color:var(--tinta);
+  }
+  .fila-form .btn{background:var(--ok);padding:10px 16px}
+  .fila-form .btn:hover{background:#08624a}
+  .fila-aviso{display:none;margin-top:10px;font:600 12.5px 'Public Sans';border-radius:8px;padding:8px 11px}
+  .fcard{
+    background:var(--cartao);border:1px solid var(--linha);border-left:5px solid var(--neutro);
+    border-radius:10px;box-shadow:var(--sombra);padding:11px 14px;margin-bottom:9px;
+    display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:start;
+  }
+  .fcard.g0{border-left-color:var(--critico)}
+  .fcard.g1{border-left-color:var(--alerta)}
+  .fcard.g2{border-left-color:var(--ok)}
+  .fcard.ginfo{border-left-color:var(--info)}
+  .fcard .fnum{font:700 15px 'IBM Plex Mono'}
+  .fcard .fpac{font-family:'Public Sans';font-weight:700}
+  .fcard .fmeta{font-size:12px;color:var(--neutro);margin-top:2px}
+  .fcard .fsit{margin-top:7px}
+  .fcard .fdet{font-size:12.5px;color:var(--tinta-2);margin-top:6px;line-height:1.5;max-width:660px}
+  .fx{
+    width:30px;height:30px;border:1px solid var(--linha);border-radius:8px;background:var(--papel);
+    font:700 14px 'Archivo';color:var(--neutro);cursor:pointer;transition:all .15s;
+  }
+  .fx:hover{color:var(--critico);border-color:var(--critico)}
+  .fespera{font:700 16px 'Archivo';color:var(--neutro)}
+
   main{max-width:1180px;margin:0 auto;padding:16px 20px 80px}
 
   /* ── filtros por situação ── */
@@ -220,6 +261,7 @@
       <span class="atualizado" id="atualizado">—</span>
       <span class="quem-sou" id="quemSou"></span>
       <button class="btn" id="btnAtualizar" title="Recarregar do banco">↻ Atualizar</button>
+      <button class="btn" id="btnFila" title="Guias que a Unimed renovou — reconferir no SGU">🔁 Renovações<span class="nbadge" id="filaBadge" hidden>0</span></button>
       <button class="btn" id="btnAdmin" title="Relatórios do dono">👑 Dono</button>
       <button class="btn" id="btnSair" title="Sair">Sair</button>
     </div>
@@ -300,7 +342,19 @@ var TRATAMENTOS = [
 ];
 var DSEM = ["dom","seg","ter","qua","qui","sex","sáb"];
 
-var estado = { linhas: [], filtroDia: null, filtroSit: "pendencias", busca: "" };
+/* ── fila de reconferência (voz da recepção) ── */
+var SIT_FILA = {
+  aguardando:    {rot:"Na fila do robô",            cls:"sinfo", g:"ginfo"},
+  conferindo:    {rot:"Robô no SGU agora…",         cls:"sinfo", g:"ginfo"},
+  renovada:      {rot:"Validade atualizada ✔",      cls:"s2",    g:"g2"},
+  sem_mudanca:   {rot:"SGU ainda com a data velha", cls:"s1",    g:"g1"},
+  fora_do_banco: {rot:"Guia fora do nosso banco",   cls:"sinfo", g:"ginfo"},
+  erro:          {rot:"Erro ao conferir",           cls:"s0",    g:"g0"}
+};
+var FILA_FINAIS = ["renovada","sem_mudanca","fora_do_banco","erro"];
+
+var estado = { linhas: [], filtroDia: null, filtroSit: "pendencias", busca: "",
+               tela: "agenda", fila: null, filaErro: "", filaDraft: "", _filaJson: "" };
 
 /* ═══ REST helpers ═══ */
 function cab(extra){
@@ -310,7 +364,7 @@ function cab(extra){
 }
 function carregar(){
   var main = document.getElementById("conteudo");
-  main.innerHTML = '<div class="carregando">Buscando a agenda no banco…</div>';
+  if(estado.tela !== "fila") main.innerHTML = '<div class="carregando">Buscando a agenda no banco…</div>';
   fetch(CFG.url + "/rest/v1/pre_agenda_cobertura?select=*", { headers: cab() })
     .then(function(r){
       if(!r.ok) throw new Error("HTTP " + r.status + " — confira URL/key e se o 08_SQL_PRE_E_CONF.sql já rodou.");
@@ -327,6 +381,7 @@ function carregar(){
       desenhar();
     })
     .catch(function(e){
+      if(estado.tela === "fila") return;
       main.innerHTML = '<div class="erro">Não consegui ler a view <span class="mono">pre_agenda_cobertura</span>.<br>' +
         escapa(e.message) + '</div>';
     });
@@ -345,6 +400,89 @@ function salvarNota(agid, tratamento, nota, aoSalvar){
     aoSalvar(true);
   }).catch(function(){ aoSalvar(false); });
 }
+
+/* ═══ fila de reconferência: REST ═══ */
+function carregarFila(){
+  fetch(CFG.url + "/rest/v1/pre_guias_reconferir?select=*&dispensada_em=is.null&order=criado_em.desc&limit=80", { headers: cab() })
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status + " — o 09_SQL_FILA_RECONFERENCIA.sql já rodou?");
+      return r.json();
+    })
+    .then(function(dados){
+      var json = JSON.stringify(dados);
+      var mudou = json !== estado._filaJson;
+      estado._filaJson = json;
+      estado.fila = dados; estado.filaErro = "";
+      atualizarBadgeFila();
+      if(estado.tela === "fila" && mudou) desenharFila();
+    })
+    .catch(function(e){
+      estado.filaErro = e.message;
+      if(estado.fila === null) estado.fila = [];
+      atualizarBadgeFila();
+      if(estado.tela === "fila") desenharFila();
+    });
+}
+function enviarFila(){
+  var campo = document.getElementById("filaNum");
+  if(!campo) return;
+  var num = (campo.value || "").replace(/\D/g, "");
+  if(num.length < 6){ avisoFila("Número esquisito — a guia tem só números (ex.: 16337779).", true); return; }
+  var vivo = (estado.fila || []).some(function(l){
+    return l.numero_guia === num && (l.situacao === "aguardando" || l.situacao === "conferindo");
+  });
+  if(vivo){ avisoFila("Essa guia já está na fila — o robô já vai olhar.", true); return; }
+  fetch(CFG.url + "/rest/v1/pre_guias_reconferir", {
+    method: "POST",
+    headers: cab({ "Content-Type": "application/json", "Prefer": "return=minimal" }),
+    body: JSON.stringify([{ numero_guia: num, autora: CFG.autora || null }])
+  }).then(function(r){
+    if(r.status === 409){ avisoFila("Essa guia já está na fila — o robô já vai olhar.", true); return; }
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    campo.value = ""; estado.filaDraft = "";
+    avisoFila("Mandei pro robô ✔ O resultado aparece aqui embaixo em instantes.", false);
+    carregarFila();
+  }).catch(function(e){
+    avisoFila("Não consegui mandar (" + e.message + ")", true);
+  });
+}
+function dispensarFila(id){
+  fetch(CFG.url + "/rest/v1/pre_guias_reconferir?id=eq." + id, {
+    method: "PATCH",
+    headers: cab({ "Content-Type": "application/json", "Prefer": "return=minimal" }),
+    body: JSON.stringify({ dispensada_em: new Date().toISOString(), dispensada_por: CFG.autora || null })
+  }).then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    estado.fila = (estado.fila || []).filter(function(l){ return l.id !== id; });
+    estado._filaJson = JSON.stringify(estado.fila);
+    atualizarBadgeFila();
+    if(estado.tela === "fila") desenharFila();
+  }).catch(function(){ avisoFila("Não consegui dispensar — tente de novo.", true); });
+}
+function avisoFila(msg, ehErro){
+  var el = document.getElementById("filaAviso");
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = "block";
+  el.style.background = ehErro ? "var(--critico-fundo)" : "var(--ok-fundo)";
+  el.style.color = ehErro ? "var(--critico)" : "var(--ok)";
+  if(!ehErro){ setTimeout(function(){ el.style.display = "none"; }, 6000); }
+}
+function fmtQuando(iso){
+  if(!iso) return "";
+  var d = new Date(iso);
+  return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) + " " +
+         d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+}
+function atualizarBadgeFila(){
+  var b = document.getElementById("filaBadge");
+  if(!b) return;
+  var prontos = (estado.fila || []).filter(function(l){ return FILA_FINAIS.indexOf(l.situacao) >= 0; }).length;
+  b.hidden = !prontos;
+  b.textContent = prontos;
+}
+function ligarPollFila(){ if(!window._pgaFilaTimer) window._pgaFilaTimer = setInterval(carregarFila, 20*1000); }
+function desligarPollFila(){ if(window._pgaFilaTimer){ clearInterval(window._pgaFilaTimer); window._pgaFilaTimer = null; } }
 
 /* ═══ utilidades ═══ */
 function escapa(s){ var d=document.createElement("div"); d.textContent=(s==null?"":String(s)); return d.innerHTML; }
@@ -373,6 +511,7 @@ function foneBonito(n){ // 5562999990001 → (62) 99999-0001
 
 /* ═══ desenho ═══ */
 function desenhar(){
+  if(estado.tela === "fila"){ desenharFila(); return; }
   desenharRegua();
   desenharFiltros();
   desenharLista();
@@ -393,7 +532,7 @@ function desenharRegua(){
   tudo.innerHTML = '<div class="dsem">todos</div><div class="dnum">'+diasUnicos().length+'d</div>';
   var totalPend = estado.linhas.filter(ehPendencia).length;
   tudo.innerHTML += '<div class="badge'+(totalPend?"":" zero")+'">'+totalPend+'</div>';
-  tudo.onclick = function(){ estado.filtroDia = null; desenhar(); };
+  tudo.onclick = function(){ estado.tela = "agenda"; desligarPollFila(); estado.filtroDia = null; desenhar(); };
   r.appendChild(tudo);
   diasUnicos().forEach(function(d){
     var b = document.createElement("button");
@@ -402,7 +541,7 @@ function desenharRegua(){
     b.innerHTML = '<div class="dsem">'+escapa(d.dia_semana.slice(0,3))+'</div>' +
                   '<div class="dnum">'+escapa(d.data_fmt)+'</div>' +
                   '<div class="badge'+(d.pend?"":" zero")+'">'+d.pend+'</div>';
-    b.onclick = function(){ estado.filtroDia = (estado.filtroDia===d.data ? null : d.data); desenhar(); };
+    b.onclick = function(){ estado.tela = "agenda"; desligarPollFila(); estado.filtroDia = (estado.filtroDia===d.data ? null : d.data); desenhar(); };
     r.appendChild(b);
   });
 }
@@ -541,9 +680,92 @@ function cardDe(l){
   return card;
 }
 
+/* ═══ fila de reconferência: tela ═══ */
+function desenharFila(){
+  var main = document.getElementById("conteudo");
+  main.innerHTML = "";
+
+  var topo = document.createElement("div"); topo.className = "fila-topo";
+  topo.innerHTML =
+    '<h2>🔁 Renovações — reconferir no SGU</h2>'+
+    '<p>A Unimed renovou a validade (senha ou carteirinha) de uma guia que <b>já existe</b>? '+
+    'Digite o número: o robô abre a guia no SGU, confere as duas datas e atualiza o sistema sozinho. '+
+    'O resultado aparece aqui embaixo — leu, tira com o ✕.</p>'+
+    '<div class="fila-form">'+
+      '<input id="filaNum" inputmode="numeric" autocomplete="off" placeholder="Número da guia (só números)">'+
+      '<button class="btn" id="filaEnviar">Mandar pro robô</button>'+
+    '</div>'+
+    '<div class="fila-aviso" id="filaAviso"></div>';
+  main.appendChild(topo);
+
+  var campo = topo.querySelector("#filaNum");
+  campo.value = estado.filaDraft || "";
+  campo.addEventListener("input", function(){ estado.filaDraft = campo.value; });
+  campo.addEventListener("keydown", function(ev){ if(ev.key === "Enter") enviarFila(); });
+  topo.querySelector("#filaEnviar").addEventListener("click", enviarFila);
+  if(estado.filaDraft){
+    campo.focus();
+    try{ campo.setSelectionRange(campo.value.length, campo.value.length); }catch(e){}
+  }
+
+  if(estado.fila === null){
+    var c = document.createElement("div"); c.className = "carregando";
+    c.textContent = "Buscando a fila no banco…";
+    main.appendChild(c); return;
+  }
+  if(estado.filaErro){
+    var er = document.createElement("div"); er.className = "erro";
+    er.innerHTML = 'Não consegui ler a fila <span class="mono">pre_guias_reconferir</span>.<br>' + escapa(estado.filaErro);
+    main.appendChild(er); return;
+  }
+  if(!estado.fila.length){
+    var v = document.createElement("div"); v.className = "vazio";
+    v.innerHTML = "<b>Nada na fila ✔</b>Renovou uma guia com a Unimed? Digite o número acima que o robô confere no SGU.";
+    main.appendChild(v); return;
+  }
+
+  var linhas = estado.fila.slice().sort(function(a, b){
+    var fa = FILA_FINAIS.indexOf(a.situacao) >= 0 ? 1 : 0;
+    var fb = FILA_FINAIS.indexOf(b.situacao) >= 0 ? 1 : 0;
+    if(fa !== fb) return fa - fb;                    /* pendentes primeiro */
+    return a.criado_em < b.criado_em ? 1 : -1;       /* mais novas em cima */
+  });
+  linhas.forEach(function(l){ main.appendChild(fcardDe(l)); });
+}
+function fcardDe(l){
+  var meta = SIT_FILA[l.situacao] || {rot:l.situacao, cls:"sinfo", g:"ginfo"};
+  var card = document.createElement("article");
+  card.className = "fcard " + meta.g;
+
+  var esq = document.createElement("div");
+  var quando = "por " + escapa(l.autora || "—") + " · " + fmtQuando(l.criado_em) +
+               (l.conferida_em ? " · conferida " + fmtQuando(l.conferida_em) : "");
+  esq.innerHTML =
+    '<div class="fnum">guia ' + escapa(l.numero_guia) +
+      (l.paciente ? ' · <span class="fpac">' + escapa(l.paciente) + '</span>' : '') + '</div>'+
+    '<div class="fmeta">' + quando + '</div>'+
+    '<div class="fsit ' + meta.cls + '"><span class="rotulo">' + escapa(meta.rot) + '</span></div>'+
+    (l.detalhe ? '<div class="fdet">' + escapa(l.detalhe) + '</div>' : '');
+  card.appendChild(esq);
+
+  var dir = document.createElement("div");
+  if(FILA_FINAIS.indexOf(l.situacao) >= 0){
+    var x = document.createElement("button");
+    x.className = "fx"; x.textContent = "✕"; x.title = "Li — pode tirar da tela";
+    x.setAttribute("aria-label","Dispensar este aviso");
+    x.onclick = function(){ dispensarFila(l.id); };
+    dir.appendChild(x);
+  } else {
+    dir.innerHTML = '<span class="fespera" title="O robô ainda vai olhar">⏳</span>';
+  }
+  card.appendChild(dir);
+  return card;
+}
+
 /* ═══ visão do dono (v1.1) ═══ */
 function abrirAdmin(){
   if(!CFG.dono){ alert("Esta área é do administrador."); return; }
+  estado.tela = "agenda"; desligarPollFila();
   desenharAdmin();
 }
 function buscarAdmin(){
@@ -707,6 +929,8 @@ function telaLogin(erro){
 function sair(){
   esquecer("pga_dono");
   CFG.dono = false;
+  desligarPollFila();
+  estado.tela = "agenda";
   telaLogin();
 }
 function iniciar(){
@@ -720,11 +944,19 @@ function iniciar(){
   document.getElementById("btnAdmin").style.display = CFG.dono ? "" : "none";
   document.getElementById("quemSou").textContent = CFG.autora;
   carregar();
-  if(!window._pgaTimer) window._pgaTimer = setInterval(carregar, 5*60*1000);  // auto-atualiza
+  carregarFila();
+  if(!window._pgaTimer) window._pgaTimer = setInterval(function(){ carregar(); carregarFila(); }, 5*60*1000);  // auto-atualiza
 }
-document.getElementById("btnAtualizar").addEventListener("click", carregar);
+document.getElementById("btnAtualizar").addEventListener("click", function(){ carregar(); carregarFila(); });
 document.getElementById("btnAdmin").addEventListener("click", abrirAdmin);
 document.getElementById("btnSair").addEventListener("click", sair);
+document.getElementById("btnFila").addEventListener("click", function(){
+  if(estado.tela === "fila"){
+    estado.tela = "agenda"; desligarPollFila(); desenhar();
+  } else {
+    estado.tela = "fila"; ligarPollFila(); desenhar(); carregarFila();
+  }
+});
 document.getElementById("busca").addEventListener("input", function(e){
   estado.busca = e.target.value.trim().toLowerCase(); desenhar();
 });
