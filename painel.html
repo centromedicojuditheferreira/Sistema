@@ -1442,10 +1442,74 @@ function desligarPollFila(){ if(GV._pf){ clearInterval(GV._pf); GV._pf = null; }
 
 /* ═══ 🧾 cadastros · 🗑️ exclusões — cargas ═══ */
 function loadCad(){
-  return fetch(GCFG.url + "/rest/v1/cad_alertas?select=*", { headers: cab() })
-    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" — o 10_SQL_PAINEL_V2.sql já rodou?"); return r.json(); })
-    .then(function(d){ estado.cad = d; estado.cadErro = ""; badgesTopo(); if(estado.tela==="cad") desenharCad(); })
+  var qGrupos = fetch(GCFG.url + "/rest/v1/cad_alertas?select=*", { headers: cab() })
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" — o 10_SQL_PAINEL_V2.sql já rodou?"); return r.json(); });
+  var qNotas = fetch(GCFG.url + "/rest/v1/oc_notas?tipo=eq.cadastro&select=referencia,tratamento,nota,autora,atualizado_em", { headers: cab() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .catch(function(){ return []; });
+  return Promise.all([qGrupos, qNotas])
+    .then(function(res){ estado.cad = porPaciente(res[0], res[1]); estado.cadErro = ""; badgesTopo(); if(estado.tela==="cad") desenharCad(); })
     .catch(function(e){ estado.cadErro = e.message; if(estado.cad===null) estado.cad = []; badgesTopo(); if(estado.tela==="cad") desenharCad(); });
+}
+
+/* ── nomes vêm colados num texto só: "Fulano (#12) · Beltrana (#34, cadastrado 01/02/25)" ── */
+function pacientesDoTexto(txt){
+  var out = [], re = /([^·]+?)\s*\(#(\d+)(?:,[^)]*)?\)/g, m;
+  while((m = re.exec(txt || "")) !== null){
+    out.push({ id: String(m[2]), nome: m[1].replace(/^[\s·]+/, "").replace(/[\s·]+$/, "") });
+  }
+  return out;
+}
+/* ── chave de agrupamento que é lixo (zeros, "01", 01010101010): NUNCA juntar fichas ── */
+function chaveLixo(ocref){
+  var m = /^(cpf|cart):(\d+)$/.exec(ocref || "");
+  if(!m) return false;
+  var bruto = m[2], d = bruto.replace(/^0+/, "");
+  if(d === "") return true;
+  if(d.length <= 3) return true;
+  if(/^(\d)\1+$/.test(bruto)) return true;
+  if(/^(01)+$/.test(d) || /^(10)+$/.test(d)) return true;
+  return false;
+}
+function porPaciente(grupos, notas){
+  var nota = {};
+  (notas || []).forEach(function(n){ nota[n.referencia] = n; });
+  var mapa = {};
+  (grupos || []).forEach(function(g){
+    var gente = pacientesDoTexto(g.paciente);
+    if(!gente.length && g.paciente_ids && g.paciente_ids.length)
+      gente = g.paciente_ids.map(function(i){ return { id: String(i), nome: "(#" + i + ")" }; });
+    var lixo = chaveLixo(g.oc_ref);
+    gente.forEach(function(p){
+      if(!mapa[p.id]) mapa[p.id] = { paciente_id: p.id, paciente: p.nome, oc_ref: "pac:" + p.id,
+                                     problemas: [], futuras: 0, lixo: false };
+      var f = mapa[p.id];
+      if(p.nome && p.nome.indexOf("(#") !== 0) f.paciente = p.nome;
+      f.futuras = Math.max(f.futuras, g.consultas_futuras || 0);
+      if(lixo) f.lixo = true;
+      f.problemas.push({
+        tipo: g.tipo, oc_ref: g.oc_ref, carteirinha: g.carteirinha, detalhe: g.detalhe,
+        lixo: lixo, no_grupo: gente.length,
+        outros: gente.filter(function(x){ return x.id !== p.id; })
+      });
+    });
+  });
+  var lista = Object.keys(mapa).map(function(k){ return mapa[k]; });
+  var corte = Date.now() - 3*3600*1000;
+  lista.forEach(function(f){
+    var n = nota[f.oc_ref];
+    f.tratamento = n ? n.tratamento : null;
+    f.nota = n ? n.nota : null;
+    f.autora = n ? n.autora : null;
+    f.nota_atualizada_em = n ? n.atualizado_em : null;
+    f.reincidente = !!(n && n.tratamento === "corrigido" && new Date(n.atualizado_em).getTime() < corte);
+  });
+  lista.sort(function(a, b){
+    if(b.futuras !== a.futuras) return b.futuras - a.futuras;
+    if(b.problemas.length !== a.problemas.length) return b.problemas.length - a.problemas.length;
+    return (a.paciente || "").localeCompare(b.paciente || "");
+  });
+  return lista;
 }
 function loadExcl(){
   return fetch(GCFG.url + "/rest/v1/oc_exclusoes?select=*&order=protegido_em.desc", { headers: cab() })
@@ -1824,10 +1888,12 @@ function desenharCad(){
   var topo = document.createElement("div"); topo.className = "oc-topo";
   topo.innerHTML =
     '<h2>🧾 Cadastros com problema</h2>'+
-    '<p>O robô compara os cadastros com o espelho da Unimed a cada 15 minutos. '+
-    '<b>Corrigiu no Feegow? O card some sozinho na próxima rodada.</b> '+
-    'Marque aqui o que você fez pra ninguém conferir a mesma coisa duas vezes. '+
-    '"Futuras" = consultas já marcadas de pacientes desse cadastro — quanto mais, mais urgente.</p>';
+    '<p>Um card por <b>paciente</b>: abra a ficha dele no Feegow e resolva o que está listado. '+
+    'O robô recompara com o espelho da Unimed a cada 15 minutos — <b>corrigiu? o card some sozinho na próxima rodada.</b> '+
+    'Marque o que você fez pra ninguém conferir a mesma coisa duas vezes.</p>'+
+    '<p>⚠️ <b>Card vermelho-escuro com aviso de dado inválido: NUNCA junte as fichas.</b> '+
+    'CPF de zeros ou carteirinha "0"/"01" agrupam gente que não tem nada a ver uma com a outra — '+
+    'ali o conserto é buscar o número certo, não mesclar.</p>';
   main.appendChild(topo);
   if(estado.cad === null){
     var c = document.createElement("div"); c.className = "carregando";
@@ -1845,18 +1911,48 @@ function desenharCad(){
   }
   estado.cad.forEach(function(cc){ main.appendChild(ccardDe(cc)); });
 }
+function textoProblema(p){
+  var nomes = p.outros.map(function(x){ return escapa(x.nome) + ' <span class="mono">#' + escapa(x.id) + '</span>'; }).join(" · ");
+  if(p.tipo === "convenio_invertido") return escapa(p.detalhe || "");
+  if(p.tipo === "carteirinha_repetida"){
+    if(p.lixo) return '<b>Carteirinha inválida</b> <span class="mono">' + escapa(p.carteirinha || "—") + '</span> — está assim em ' +
+      p.no_grupo + ' fichas diferentes. <b>Buscar o número real na Unimed e preencher.</b> ' +
+      '🚫 Não juntar com: ' + (nomes || "—") + '.';
+    return 'Mesma carteirinha <span class="mono">' + escapa(p.carteirinha || "—") + '</span> em ' +
+      (p.outros.length === 1 ? 'outra ficha' : 'outras ' + p.outros.length + ' fichas') + ': ' + nomes +
+      '. <b>Juntar os cadastros</b> — ou corrigir o número, se forem pessoas diferentes.';
+  }
+  if(p.tipo === "paciente_duplicado"){
+    if(p.lixo) return '<b>CPF inválido</b> no cadastro — o mesmo número está em ' + p.no_grupo + ' fichas. ' +
+      '<b>Corrigir o CPF do paciente.</b> 🚫 Não juntar com as outras fichas: são pessoas diferentes.';
+    if(String(p.oc_ref || "").indexOf("nn:") === 0)
+      return 'Mesmo nome e nascimento de: ' + nomes + '. <b>Conferir e juntar</b> — o agendamento e a guia podem estar caindo em fichas diferentes.';
+    return 'Mesmo CPF de: ' + nomes + '. <b>Conferir e juntar</b> — se os nomes forem diferentes, o CPF é que está errado em uma delas.';
+  }
+  return escapa(p.detalhe || "");
+}
 function ccardDe(c){
   var card = document.createElement("article");
   card.className = "fcard " + (cadAberto(c) ? "g0" : "g2");
   var esq = document.createElement("div");
   var tags = "";
-  if(c.consultas_futuras > 0) tags += '<span class="tagx fut">'+c.consultas_futuras+' futura'+(c.consultas_futuras===1?'':'s')+'</span>';
+  if(c.futuras > 0) tags += '<span class="tagx fut">'+c.futuras+' futura'+(c.futuras===1?'':'s')+'</span>';
+  if(c.problemas.length > 1) tags += '<span class="tagx aguarda">'+c.problemas.length+' problemas</span>';
+  if(c.lixo) tags += '<span class="tagx reinc" title="Dado inválido no cadastro — não juntar fichas">não juntar</span>';
   if(c.reincidente) tags += '<span class="tagx reinc" title="Marcou corrigido faz tempo e o problema continua no espelho">reincidente</span>';
+
+  var itens = c.problemas.map(function(p){
+    return '<div style="margin-top:7px">'+
+             '<span class="rotulo" style="background:var(--critico-fundo);color:var(--critico);display:inline-block;'+
+             'border-radius:7px;font:700 12px \'Public Sans\';padding:3px 9px">'+ escapa(CAD_TIT[p.tipo] || p.tipo) +'</span>'+
+             '<div class="fdet">'+ textoProblema(p) +'</div>'+
+           '</div>';
+  }).join("");
+
   esq.innerHTML =
-    '<div class="fnum">' + escapa(CAD_TIT[c.tipo] || c.tipo) + tags + '</div>'+
-    '<div class="fmeta"><span class="fpac">' + escapa(c.paciente || "—") + '</span>' +
-      (c.carteirinha ? ' · <span class="mono">' + escapa(c.carteirinha) + '</span>' : '') + '</div>'+
-    '<div class="fdet">' + escapa(c.detalhe || "") + '</div>';
+    '<div class="fnum"><span class="fpac">' + escapa(c.paciente || "—") + '</span> · ficha ' +
+      '<span class="mono">#' + escapa(c.paciente_id) + '</span>' + tags + '</div>' + itens;
+
   var acoes = document.createElement("div"); acoes.className = "acoes";
   var sel = document.createElement("select");
   sel.setAttribute("aria-label","O que você fez");
