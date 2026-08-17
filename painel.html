@@ -1448,9 +1448,9 @@ function loadCad(){
     .catch(function(e){ estado.cadErro = e.message; if(estado.cad===null) estado.cad = []; badgesTopo(); if(estado.tela==="cad") desenharCad(); });
 }
 function loadExcl(){
-  return fetch(GCFG.url + "/rest/v1/oc_exclusoes?select=*", { headers: cab() })
+  return fetch(GCFG.url + "/rest/v1/oc_exclusoes?select=*&order=protegido_em.desc", { headers: cab() })
     .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" — o 10_SQL_PAINEL_V2.sql já rodou?"); return r.json(); })
-    .then(function(d){ estado.excl = d; estado.exclErro = ""; badgesTopo(); if(estado.tela==="excl") desenharExcl(); })
+    .then(function(d){ estado.excl = (d||[]).filter(exclVisivel); estado.exclErro = ""; badgesTopo(); if(estado.tela==="excl") desenharExcl(); })
     .catch(function(e){ estado.exclErro = e.message; if(estado.excl===null) estado.excl = []; badgesTopo(); if(estado.tela==="excl") desenharExcl(); });
 }
 function aprovarExclusao(l, btn){
@@ -1486,6 +1486,12 @@ function ehPendencia(l){ return l.gravidade === 0 && !tratada(l); }          /* 
 function ehAviso(l){ return l.situacao !== "coberto" && l.gravidade !== 0 && !tratada(l); }
 function cadAberto(c){ return !c.tratamento || c.tratamento === "pendente"; }
 function exclAberta(x){ return (!x.tratamento || x.tratamento === "pendente") || x.aguardando_dono === true; }
+function ehDeHoje(x){
+  if(!x.protegido_em) return false;
+  var h = new Date(); h.setHours(0,0,0,0);
+  return new Date(x.protegido_em).getTime() >= h.getTime();
+}
+function exclVisivel(x){ return ehDeHoje(x) || exclAberta(x); }
 function primeiroCelular(cel, tel){
   var campos = [cel, tel];
   for (var i=0;i<campos.length;i++){
@@ -1911,7 +1917,7 @@ function desenharExcl(){
   }
   if(!estado.excl.length){
     var v = document.createElement("div"); v.className = "vazio";
-    v.innerHTML = "<b>Nenhuma família protegida ✔</b>Ninguém apagou série inteira de sessões — do jeito que tem que ser.";
+    v.innerHTML = "<b>Nada pra tratar ✔</b>Ninguém apagou série inteira hoje, e não sobrou nada em aberto de antes.";
     main.appendChild(v); return;
   }
   estado.excl.forEach(function(x){ main.appendChild(xcardDe(x)); });
@@ -1921,6 +1927,7 @@ function xcardDe(x){
   card.className = "fcard " + (x.aguardando_dono ? "g1" : (exclAberta(x) ? "g0" : "g2"));
   var esq = document.createElement("div");
   var tags = "";
+  if(!ehDeHoje(x)) tags += '<span class="tagx aguarda" title="Apagado em dia anterior e ainda sem resposta">de outro dia</span>';
   if(x.aguardando_dono) tags += '<span class="tagx aguarda">aguardando o dono</span>';
   if(x.reincidente) tags += '<span class="tagx reinc" title="Marcou restaurei faz tempo e a proteção continua de pé — o Feegow ainda não mostrou as sessões de volta">restaurei — e não voltou</span>';
   esq.innerHTML =
