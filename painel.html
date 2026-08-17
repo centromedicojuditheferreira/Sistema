@@ -1513,10 +1513,44 @@ function porPaciente(grupos, notas){
   return lista;
 }
 function loadExcl(){
-  return fetch(GCFG.url + "/rest/v1/oc_exclusoes?select=*&order=protegido_em.desc", { headers: cab() })
-    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" — o 10_SQL_PAINEL_V2.sql já rodou?"); return r.json(); })
-    .then(function(d){ estado.excl = (d||[]).filter(exclVisivel); estado.exclErro = ""; badgesTopo(); if(estado.tela==="excl") desenharExcl(); })
+  var qFam = fetch(GCFG.url + "/rest/v1/oc_exclusoes?select=*&order=protegido_em.desc", { headers: cab() })
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" — o 10_SQL_PAINEL_V2.sql já rodou?"); return r.json(); });
+  var qDisp = fetch(GCFG.url + "/rest/v1/oc_notas?tipo=eq.exclusao_dispensada&select=referencia,autora,atualizado_em", { headers: cab() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .catch(function(){ return []; });
+  return Promise.all([qFam, qDisp])
+    .then(function(res){
+      var disp = {};
+      (res[1] || []).forEach(function(n){ disp[n.referencia] = n; });
+      var linhas = (res[0] || []).map(function(x){
+        var d = disp[x.oc_ref];
+        if(d){ x.dispensada_em = d.atualizado_em || true; x.dispensada_por = d.autora; }
+        return x;
+      }).filter(exclVisivel);
+      estado.excl = linhas; estado.exclErro = ""; badgesTopo();
+      if(estado.tela==="excl") desenharExcl();
+    })
     .catch(function(e){ estado.exclErro = e.message; if(estado.excl===null) estado.excl = []; badgesTopo(); if(estado.tela==="excl") desenharExcl(); });
+}
+/* ✕ do dono: some com o card SEM soltar a proteção do faturamento */
+function dispensarExclusao(l, btn){
+  if(!ehDono()) return;
+  if(!confirm("Tirar da tela a exclusão de " + (l.paciente || "—") + "?\n\n" +
+              "Atenção: os " + l.n_sessoes + " agendamentos CONTINUAM protegidos no faturamento. " +
+              "Isto só esconde o card. Pra soltar de verdade, use 👑 Aprovar e liberar.")) return;
+  if(btn){ btn.disabled = true; btn.textContent = "…"; }
+  fetch(GCFG.url + "/rest/v1/oc_notas?on_conflict=tipo,referencia", {
+    method: "POST",
+    headers: cab({ "Content-Type": "application/json",
+                   "Prefer": "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify([{ tipo: "exclusao_dispensada", referencia: l.oc_ref, autora: autora() || null }])
+  }).then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return loadExcl();
+  }).catch(function(e){
+    alert("Não consegui dispensar: " + e.message);
+    if(btn){ btn.disabled = false; btn.textContent = "✕"; }
+  });
 }
 function aprovarExclusao(l, btn){
   if(!ehDono()) return;
@@ -1572,12 +1606,19 @@ function ehPendencia(l){ return l.gravidade === 0 && !tratada(l); }          /* 
 function ehAviso(l){ return l.situacao !== "coberto" && l.gravidade !== 0 && !tratada(l); }
 function cadAberto(c){ return !c.tratamento || c.tratamento === "pendente"; }
 function exclAberta(x){ return (!x.tratamento || x.tratamento === "pendente") || x.aguardando_dono === true; }
-function ehDeHoje(x){
+/* ═══ 🗑️ Exclusões — marco fixo ═══
+   Nada anterior ao marco aparece (limpeza do legado, decisão do dono em 17/08).
+   Do marco em diante a família FICA na tela até ser resolvida:
+     · restaurada no Feegow  → a conferência da madrugada vê e a linha sai sozinha
+     · aprovada pelo dono    → oc_liberar_protecao solta a proteção e a linha sai
+     · dispensada pelo dono  → o ✕ some com o card sem soltar a proteção
+   Secretária nenhuma tira card daqui — só o administrador. */
+var MARCO_EXCLUSOES = "2026-08-17";
+function depoisDoMarco(x){
   if(!x.protegido_em) return false;
-  var h = new Date(); h.setHours(0,0,0,0);
-  return new Date(x.protegido_em).getTime() >= h.getTime();
+  return String(x.protegido_em).slice(0, 10) >= MARCO_EXCLUSOES;
 }
-function exclVisivel(x){ return ehDeHoje(x); }
+function exclVisivel(x){ return depoisDoMarco(x) && !x.dispensada_em; }
 function primeiroCelular(cel, tel){
   var campos = [cel, tel];
   for (var i=0;i<campos.length;i++){
@@ -2044,7 +2085,8 @@ function desenharExcl(){
     '<p><b>Regra da casa:</b> nunca use "excluir TODAS as sessões" no Feegow — sempre <b>"somente este"</b> ou <b>"deste dia em diante"</b>. '+
     'Quando a série inteira é apagada, o robô PROTEGE os agendamentos (eles não somem do faturamento) e a família aparece aqui.</p>'+
     '<p>Apagou sem querer? <b>Restaure os agendamentos no Feegow</b> e marque "Restaurei" — a conferência da madrugada vê que voltou e o card some sozinho. '+
-    'Era pra apagar mesmo (alta, desistência)? Marque <b>"Estava certo apagar"</b> — o dono aprova e o sistema libera.</p>';
+    'Era pra apagar mesmo (alta, desistência)? Marque <b>"Estava certo apagar"</b> — o dono aprova e o sistema libera.</p>'+
+    '<p>⏳ <b>O card fica aqui até ser resolvido</b> — não some na virada do dia. Só o administrador pode tirá-lo da tela.</p>';
   main.appendChild(topo);
   if(estado.excl === null){
     var c = document.createElement("div"); c.className = "carregando";
@@ -2057,7 +2099,7 @@ function desenharExcl(){
   }
   if(!estado.excl.length){
     var v = document.createElement("div"); v.className = "vazio";
-    v.innerHTML = "<b>Nenhuma exclusão hoje ✔</b>Ninguém apagou série inteira de sessões desde a meia-noite.";
+    v.innerHTML = "<b>Nada pendente ✔</b>Nenhuma série apagada esperando conserto.";
     main.appendChild(v); return;
   }
   estado.excl.forEach(function(x){ main.appendChild(xcardDe(x)); });
@@ -2120,12 +2162,21 @@ function xcardDe(x){
   esq.appendChild(acoes);
   card.appendChild(esq);
   var dir = document.createElement("div");
+  dir.style.cssText = "display:flex;flex-direction:column;gap:6px;align-items:flex-end";
   if(x.aguardando_dono && ehDono()){
     var b = document.createElement("button");
     b.className = "gv-btn verde mini"; b.textContent = "👑 Aprovar e liberar";
     b.title = "Confirma que era pra apagar mesmo — a reconciliação enterra na próxima rodada";
     b.onclick = function(){ aprovarExclusao(x, b); };
     dir.appendChild(b);
+  }
+  if(ehDono()){
+    var bx = document.createElement("button");
+    bx.className = "fx"; bx.textContent = "✕";
+    bx.title = "Tirar da tela (só o administrador) — NÃO solta a proteção do faturamento";
+    bx.setAttribute("aria-label", "Dispensar este card");
+    bx.onclick = function(){ dispensarExclusao(x, bx); };
+    dir.appendChild(bx);
   }
   card.appendChild(dir);
   return card;
