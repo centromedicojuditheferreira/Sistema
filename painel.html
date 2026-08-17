@@ -1286,6 +1286,7 @@ var SIT = {
   guia_de_outra_terapia: {rot:"Guia de OUTRA terapia",cls:"s0", g:"g0", acao:"🚫 A guia viva do paciente é de outra terapia. Conferir se o erro é o procedimento marcado ou a guia pedida — corrigir AGORA ou desmarcar."},
   procedimento_errado:   {rot:"Procedimento errado",  cls:"s0", g:"g0", acao:"🚫 O procedimento do agendamento não é nenhum dos 4 códigos Unimed. Corrigir no Feegow — desse jeito não fatura e o painel fica cego."},
   aba_intercambio:       {rot:"ABA no Intercâmbio",   cls:"s0", g:"g0", acao:"🚫 ABA não é coberto no convênio Intercâmbio. Corrigir o convênio ou o procedimento ANTES da sessão."},
+  psico_com_guia_aba:    {rot:"Psico com guia de ABA", cls:"s0", g:"g0", acao:"🚫 O paciente tem guia de ABA viva — não é pra ter sessão de psicologia acontecendo. Corrigir o procedimento do agendamento no Feegow AGORA."},
   ultima_sessao:         {rot:"Última sessão",        cls:"s1", g:"g1", acao:"É a última sessão do saldo — solicitar guia nova já, pra agenda seguinte não furar."},
   duplicidade_dia:       {rot:"Duas no mesmo dia",    cls:"s1", g:"g1", acao:"Só uma consulta da mesma terapia fatura por dia. Remarcar ou excluir uma delas."},
   sem_saldo_na_fila:     {rot:"Fila passa do saldo",  cls:"s1", g:"g1", acao:"Solicitar guia nova ANTES desta data — a fila do paciente consome o saldo antes de chegar aqui."},
@@ -1293,7 +1294,7 @@ var SIT = {
   sessao_em_feriado:     {rot:"Cai no feriado",       cls:"sinfo", g:"ginfo", acao:"Remarcar — o sistema não fatura sessão em feriado."},
   coberto:               {rot:"Coberta",              cls:"s2", g:"g2", acao:""}
 };
-var SIT_ORDEM = ["sem_guia","guia_de_outra_terapia","guia_vencida","saldo_esgotado","procedimento_errado","aba_intercambio","sem_carteirinha"];
+var SIT_ORDEM = ["sem_guia","guia_de_outra_terapia","psico_com_guia_aba","guia_vencida","saldo_esgotado","procedimento_errado","aba_intercambio","sem_carteirinha"];
 var TRATAMENTOS = [["pendente","Pendente"],["guia_solicitada","Guia solicitada"],["resolvido","Resolvido"],["sem_solucao","Sem solução"],["desmarcado","Desmarcado"]];
 var TRAT_CAD  = [["pendente","Pendente"],["corrigido","Corrigido"],["estava_certo","Estava certo"],["sem_solucao","Sem solução"]];
 var TRAT_EXCL = [["pendente","Pendente"],["restaurei","Restaurei no Feegow"],["estava_certo","Estava certo apagar"],["sem_solucao","Sem solução"]];
@@ -1331,7 +1332,7 @@ function carregar(){
       return r.json();
     })
     .then(function(dados){
-      estado.linhas = dados; estado._carregouEm = Date.now();
+      estado.linhas = regrasAba(dados); estado._carregouEm = Date.now();
       var tela = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
       var regua = (dados[0] && dados[0].calculado_em)
         ? new Date(dados[0].calculado_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : null;
@@ -1537,6 +1538,27 @@ function aprovarExclusao(l, btn){
 }
 
 /* ═══ utilidades ═══ */
+/* ═══ 🧩 regras de ABA ═══
+   O paciente com guia de ABA viva não pode ter sessão de psicologia acontecendo.
+   A régua já calcula 'outra_guia_terapia' para TODA consulta — inclusive as verdes —
+   então basta reclassificar aqui, sem tocar no banco. */
+function regrasAba(linhas){
+  (linhas || []).forEach(function(l){
+    if(l.especialidade === "psicologia" && l.outra_guia_terapia === "aba" && l.situacao !== "sessao_em_feriado"){
+      l.situacao = "psico_com_guia_aba";
+      l.gravidade = 0;
+    }
+  });
+  return linhas || [];
+}
+/* Tudo que é problema de ABA: consulta de ABA com qualquer pendência,
+   mais a psicologia que está acontecendo por cima de guia de ABA. */
+function ehProblemaAba(l){
+  if(tratada(l)) return false;
+  if(l.situacao === "psico_com_guia_aba") return true;
+  if(l.especialidade !== "aba") return false;
+  return l.situacao !== "coberto" && l.situacao !== "sessao_em_feriado";
+}
 function escapa(s){ var d=document.createElement("div"); d.textContent=(s==null?"":String(s)); return d.innerHTML; }
 function fmtData(v){ if(!v) return "—"; return String(v).split("T")[0].split("-").reverse().join("/"); }
 function fmtQuando(iso){
@@ -1592,12 +1614,27 @@ function desenharFaixa(){
   if(estado.tela !== "agenda"){ f.hidden = true; return; }
   var cont = {};
   estado.linhas.forEach(function(l){ if(ehPendencia(l)) cont[l.situacao] = (cont[l.situacao]||0)+1; });
+  var abaN = estado.linhas.filter(ehProblemaAba).length;
+  /* as situações de ABA saem dos chips soltos: entram todas no chip 🧩 ABA */
+  delete cont["aba_intercambio"];
+  delete cont["psico_com_guia_aba"];
   var tipos = SIT_ORDEM.filter(function(s){ return cont[s]; });
   Object.keys(cont).forEach(function(s){ if(tipos.indexOf(s) < 0) tipos.push(s); });
   var cadN  = (estado.cad  || []).filter(cadAberto).length;
   var exclN = (estado.excl || []).filter(exclAberta).length;
-  if(!tipos.length && !cadN && !exclN){ f.hidden = true; return; }
+  if(!tipos.length && !abaN && !cadN && !exclN){ f.hidden = true; return; }
   f.hidden = false; f.innerHTML = '<span class="ftit">🚨 Resolver agora:</span>';
+  if(abaN){
+    var ca = document.createElement("button");
+    ca.className = "fchip" + (estado.filtroTipo === "__aba__" ? " on" : "");
+    ca.innerHTML = "🧩 ABA <b>" + abaN + "</b>";
+    ca.title = "Tudo de ABA: sem guia de ABA, ABA no Intercâmbio e psicologia por cima de guia de ABA";
+    ca.onclick = function(){
+      estado.filtroTipo = (estado.filtroTipo === "__aba__" ? null : "__aba__");
+      desenharAgenda();
+    };
+    f.appendChild(ca);
+  }
   tipos.forEach(function(s){
     var c = document.createElement("button");
     c.className = "fchip" + (estado.filtroTipo === s ? " on" : "");
@@ -1685,6 +1722,7 @@ function desenharFiltros(){
 function passaFiltro(l){
   if(estado.filtroDia && l.data !== estado.filtroDia) return false;
   if(estado.busca && (l.paciente||"").toLowerCase().indexOf(estado.busca) < 0) return false;
+  if(estado.filtroTipo === "__aba__") return ehProblemaAba(l);
   if(estado.filtroSit==="pendencias"){
     if(!ehPendencia(l)) return false;
     if(estado.filtroTipo && l.situacao !== estado.filtroTipo) return false;
@@ -1704,6 +1742,12 @@ function detalheDe(l){
            (typeof l.dias_para_vencer==="number" ? ' <b>(há '+Math.abs(l.dias_para_vencer)+' dia'+(Math.abs(l.dias_para_vencer)===1?'':'s')+')</b>' : ''));
   if(l.situacao==="saldo_esgotado")
     m.push('guia <span class="mono">'+escapa(l.numero_guia)+'</span> vale até '+escapa(l.guia_fim_fmt)+', mas zerou');
+  if(l.situacao==="psico_com_guia_aba")
+    m.push('guia de <b>ABA</b> viva <span class="mono">'+escapa(l.outra_guia_numero||"—")+'</span>'+
+           (l.outra_guia_qt!=null ? ' · '+l.outra_guia_qt+' sessão(ões)' : '')+
+           (l.outra_guia_fim ? ' · vence '+fmtData(l.outra_guia_fim) : '')+
+           ' — mas o agendamento está como <b>psicologia</b>'+
+           (l.numero_guia ? ' (guia de psico <span class="mono">'+escapa(l.numero_guia)+'</span>)' : ''));
   if(l.situacao==="guia_de_outra_terapia")
     m.push('a guia viva <span class="mono">'+escapa(l.outra_guia_numero||"—")+'</span> é de <b>'+escapa(l.outra_guia_terapia||"?")+'</b>'+
            (l.outra_guia_qt!=null ? ' · '+l.outra_guia_qt+' sessão(ões)' : '')+
