@@ -186,6 +186,8 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
     <button class="gv-aba" data-tela="fila">🔁 Renovações<span class="gv-b" id="gv-b-fila" hidden>0</span></button>
     <button class="gv-aba" data-tela="cad">🧾 Cadastros<span class="gv-b" id="gv-b-cad" hidden>0</span></button>
     <button class="gv-aba" data-tela="excl">🗑️ Exclusões<span class="gv-b" id="gv-b-excl" hidden>0</span></button>
+    <button class="gv-aba" data-tela="corte">✂️ Corte<span class="gv-b" id="gv-b-corte" hidden>0</span></button>
+    <button class="gv-aba" data-tela="falhas">📵 Falhas<span class="gv-b" id="gv-b-falhas" hidden>0</span></button>
     <button class="gv-aba" data-tela="dono" id="gv-aba-dono" style="display:none">👑 Dono</button>
     <span class="gv-esp"></span>
     <input class="gv-busca" id="gv-busca" type="search" placeholder="Buscar paciente…" aria-label="Buscar paciente">
@@ -1292,6 +1294,7 @@ var SIT = {
   sem_saldo_na_fila:     {rot:"Fila passa do saldo",  cls:"s1", g:"g1", acao:"Solicitar guia nova ANTES desta data — a fila do paciente consome o saldo antes de chegar aqui."},
   guia_ainda_nao_vale:   {rot:"Guia só vale depois",  cls:"s1", g:"g1", acao:"Conferir a data de autorização com a Unimed."},
   sessao_em_feriado:     {rot:"Cai no feriado",       cls:"sinfo", g:"ginfo", acao:"Remarcar — o sistema não fatura sessão em feriado."},
+  ultima_viavel_validade:{rot:"Última viável (validade)", cls:"s1", g:"g1", acao:"A guia ainda tem saldo, mas a VALIDADE morre antes da próxima consulta — esta é a última que a cobertura alcança. Solicitar renovação já."},
   coberto:               {rot:"Coberta",              cls:"s2", g:"g2", acao:""}
 };
 var SIT_ORDEM = ["sem_guia","guia_de_outra_terapia","psico_com_guia_aba","guia_vencida","saldo_esgotado","procedimento_errado","aba_intercambio","sem_carteirinha"];
@@ -1314,6 +1317,7 @@ var FILA_FINAIS = ["renovada","sem_mudanca","fora_do_banco","erro"];
 var estado = { linhas:[], filtroDia:null, filtroSit:"pendencias", filtroTipo:null, busca:"",
                tela:"agenda", fila:null, filaErro:"", filaDraft:"", _filaJson:"",
                cad:null, cadErro:"", excl:null, exclErro:"", donoModo:"resumo",
+               corte:null, corteErro:"", falhas:null, falhasErro:"",
                _carregouEm:0 };
 
 /* ═══ REST ═══ */
@@ -1578,6 +1582,11 @@ function aprovarExclusao(l, btn){
    então basta reclassificar aqui, sem tocar no banco. */
 function regrasAba(linhas){
   (linhas || []).forEach(function(l){
+    /* v2.1 · última viável por validade: coberta, mas a régua avisa */
+    if(l.ultima_viavel && l.situacao === "coberto"){
+      l.situacao = "ultima_viavel_validade";
+      l.gravidade = 1;
+    }
     if(l.especialidade === "psicologia" && l.outra_guia_terapia === "aba" && l.situacao !== "sessao_em_feriado"){
       l.situacao = "psico_com_guia_aba";
       l.gravidade = 0;
@@ -1645,8 +1654,11 @@ function badgesTopo(){
   var cadN  = (estado.cad  || []).filter(cadAberto).length;
   var exclN = (estado.excl || []).filter(exclAberta).length;
   function b(id, n){ var el = document.getElementById(id); if(!el) return; el.hidden = !n; el.textContent = n; }
+  var corteN  = (estado.corte  || []).filter(corteAtivo).length;
+  var falhasN = (estado.falhas || []).length;
   b("gv-b-fila", prontos); b("gv-b-cad", cadN); b("gv-b-excl", exclN);
-  b("gv-sbb", pend + cadN + exclN);
+  b("gv-b-corte", corteN); b("gv-b-falhas", falhasN);
+  b("gv-sbb", pend + cadN + exclN + corteN + falhasN);
   desenharFaixa();
 }
 function desenharFaixa(){
@@ -1801,6 +1813,11 @@ function detalheDe(l){
     m.push('convênio Intercâmbio (8)'+(l.numero_guia ? ' · guia <span class="mono">'+escapa(l.numero_guia)+'</span>' : '')+' — ABA não é coberto');
   if(l.situacao==="ultima_sessao")
     m.push('guia <span class="mono">'+escapa(l.numero_guia)+'</span> · <b>ÚLTIMA sessão do saldo</b> · vence '+escapa(l.guia_fim_fmt||"—"));
+  if(l.ultima_viavel && l.proximo_agendamento_id)
+    m.push('✂️ <b>ÚLTIMA CONSULTA VIÁVEL</b> — sem guia nova, corte às <b>21h</b> (sáb 11h) do dia '+escapa(l.data_fmt)+
+           ' · '+(l.futuros_apos||0)+' futuro(s) na fila · '+
+           '<a class="mono" target="_blank" rel="noopener" href="https://app.feegow.com/main/?P=Agenda-1&Pers=1&AgendamentoID='+l.proximo_agendamento_id+
+           '">abrir o PRÓXIMO no Feegow</a> e apagar <b>este e os próximos</b>');
   if(l.situacao==="duplicidade_dia" && l.dup_no_dia)
     m.push('<b>'+l.dup_no_dia+' consultas</b> de '+escapa(l.especialidade)+' neste dia — só uma fatura');
   if(l.situacao==="sem_saldo_na_fila")
@@ -1848,12 +1865,7 @@ function cardDe(l){
       '<div class="detalhe">'+detalheDe(l)+'</div></div>';
   var acoes = document.createElement("div"); acoes.className = "acoes";
   if(cel){
-    var wa = document.createElement("a");
-    wa.className = "fone"; wa.target = "_blank"; wa.rel = "noopener";
-    wa.href = "https://wa.me/"+cel;
-    wa.innerHTML = "🟢 "+escapa(foneBonito(cel));
-    wa.title = "Abrir conversa no WhatsApp";
-    acoes.appendChild(wa);
+    acoes.appendChild(botaoFone(cel));
   } else {
     var sf = document.createElement("span"); sf.className="fone"; sf.textContent = "📵 sem celular";
     acoes.appendChild(sf);
@@ -2376,6 +2388,275 @@ function desenharAdmin(){
 }
 
 /* ═══ navegação interna · boot · relógio de 10 min ═══ */
+/* ═══ ✂️ CORTE + 📵 FALHAS · v2.1 (24/08/2026) ═══
+   Lê corte_fila e conf_falhas (11_SQL_CORTE.sql). Assinatura da tesoura
+   grava em corte_notas. Número de celular: só dígitos SEM o 55, copiável
+   — a plataforma da casa busca assim. */
+var SIT_CORTE = {
+  cortar_hoje:       {rot:"CORTAR HOJE",        cls:"s0", g:"g0"},
+  cortar_agora:      {rot:"Cortar agora",       cls:"s0", g:"g0"},
+  prazo_vencido:     {rot:"Prazo VENCIDO",      cls:"s0", g:"g0"},
+  aguardando:        {rot:"Aguardando guia",    cls:"sinfo", g:"ginfo"},
+  indulto:           {rot:"Indulto ativo",      cls:"sinfo", g:"ginfo"},
+  excluido_conferir: {rot:"Excluída — conferindo", cls:"s1", g:"g1"}
+};
+function corteAtivo(c){
+  return c.estado === "cortar_hoje" || c.estado === "cortar_agora" ||
+         c.estado === "prazo_vencido" || c.apagou_incompleto === true;
+}
+function foneDigitos(cel){ return (cel || "").replace(/^55/, ""); }
+function botaoFone(cel){
+  var b = document.createElement("button");
+  b.type = "button"; b.className = "fone";
+  var dig = foneDigitos(cel);
+  b.innerHTML = "📱 <span class=\"mono\">" + escapa(dig) + "</span>";
+  b.title = "Copiar o número (só dígitos, sem o 55) — é assim que a busca da plataforma acha";
+  b.onclick = function(){
+    (navigator.clipboard ? navigator.clipboard.writeText(dig) : Promise.reject())
+      .then(function(){ b.innerHTML = "✔ copiado"; },
+            function(){ window.prompt("Copie o número:", dig); });
+    setTimeout(function(){ b.innerHTML = "📱 <span class=\"mono\">" + escapa(dig) + "</span>"; }, 1600);
+  };
+  return b;
+}
+function fmtPrazo(p){
+  if(!p) return "";
+  var d = new Date(p);
+  if(isNaN(d)) return escapa(p);
+  var dias = ["dom","seg","ter","qua","qui","sex","sáb"];
+  return dias[d.getDay()] + " " + String(d.getDate()).padStart(2,"0") + "/" +
+         String(d.getMonth()+1).padStart(2,"0") + " às " +
+         String(d.getHours()).padStart(2,"0") + "h" +
+         (d.getMinutes() ? String(d.getMinutes()).padStart(2,"0") : "");
+}
+
+/* ── ✂️ dados ── */
+function loadCorte(){
+  fetch(GCFG.url + "/rest/v1/corte_fila?select=*", { headers: cab() })
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(rows){ estado.corte = rows || []; estado.corteErro = "";
+                          if(estado.tela === "corte") desenharCorte(); badgesTopo(); })
+    .catch(function(e){ estado.corteErro = String(e.message||e);
+                        if(estado.tela === "corte") desenharCorte(); });
+}
+function salvarCorteNota(ref, campos, aoSalvar){
+  var corpo = Object.assign({ referencia: ref, autora: autora() }, campos);
+  fetch(GCFG.url + "/rest/v1/corte_notas?on_conflict=referencia", {
+    method: "POST",
+    headers: Object.assign({ "Content-Type": "application/json",
+                             "Prefer": "resolution=merge-duplicates" }, cab()),
+    body: JSON.stringify(corpo)
+  }).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status);
+                       if(aoSalvar) aoSalvar(true); loadCorte(); })
+    .catch(function(){ if(aoSalvar) aoSalvar(false); });
+}
+
+/* ── ✂️ tela ── */
+function desenharCorte(){
+  var host = document.getElementById("gv-corpo"); if(!host) return;
+  host.innerHTML = "";
+  var topo = document.createElement("div"); topo.className = "gv-explica";
+  topo.innerHTML =
+    "<b>✂️ A tesoura do dia.</b> Quem está aqui <b>perdeu a cobertura</b>: ou hoje é a última " +
+    "consulta viável (corte às <b>21h</b> — sábado, <b>11h</b>), ou os futuros já estão sem guia. " +
+    "O caminho: abrir o link do <b>PRÓXIMO</b> agendamento no Feegow e apagar <b>\u201ceste e os " +
+    "próximos\u201d</b> (nunca os anteriores!) — depois assinar aqui no botão <b>Excluí</b>. " +
+    "O card some sozinho quando o espelho confirmar. <b>Aguardando</b> = guia solicitada, " +
+    "prazo máximo de 2 dias; venceu, corta.";
+  host.appendChild(topo);
+  if(estado.corteErro){
+    var er = document.createElement("p"); er.className = "gv-vazio";
+    er.textContent = "⚠️ " + estado.corteErro + " — o 11_SQL_CORTE.sql já rodou no banco?";
+    host.appendChild(er); return;
+  }
+  if(estado.corte === null){
+    var lo = document.createElement("p"); lo.className = "gv-vazio";
+    lo.textContent = "Carregando a fila…"; host.appendChild(lo); return;
+  }
+  var rows = estado.corte.slice();
+  if(!rows.length){
+    var ok = document.createElement("p"); ok.className = "gv-vazio";
+    ok.textContent = "✂️ Fila limpa — ninguém pra cortar. A agenda está blindada.";
+    host.appendChild(ok); return;
+  }
+  var ordem = { cortar_hoje:0, prazo_vencido:1, cortar_agora:2, excluido_conferir:3, aguardando:4, indulto:5 };
+  rows.sort(function(a,b){ return (ordem[a.estado]||9) - (ordem[b.estado]||9); });
+  rows.forEach(function(c){ host.appendChild(cardCorte(c)); });
+}
+function cardCorte(c){
+  var meta = SIT_CORTE[c.estado] || {rot:c.estado, cls:"sinfo", g:"ginfo"};
+  var card = document.createElement("article");
+  card.className = "card " + meta.g + (c.estado === "indulto" ? " tratada" : "");
+  var det = [];
+  det.push("<b>" + (c.n_descobertos||0) + "</b> futuro(s) sem cobertura: " + escapa(c.datas_fmt||"—"));
+  if(c.motivos) det.push("motivo: " + escapa(c.motivos));
+  if(c.prazo) det.push("⏱️ prazo: <b>" + fmtPrazo(c.prazo) + "</b>");
+  if(c.estado === "aguardando")
+    det.push("🔁 guia " + (c.hold_fila_em ? "na fila do robô" : "solicitada no balcão") + " — segurando o corte");
+  if(c.apagou_incompleto)
+    det.push('<span class="reinc">⚠️ APAGOU INCOMPLETO — assinado como excluída, mas os futuros AINDA existem. Foi apagado só um? Abrir o Feegow e apagar \u201ceste e os próximos\u201d.</span>');
+  if(c.tratamento === "indulto" && c.indulto_ate)
+    det.push("🕊️ indulto até <b>" + fmtData(c.indulto_ate) + "</b>" + (c.autora ? " · por " + escapa(c.autora) : ""));
+  if(c.tratamento === "excluido" && c.nota_atualizada_em)
+    det.push("✂️ assinada como excluída " + (c.autora ? "por <b>" + escapa(c.autora) + "</b> " : "") + "em " + fmtQuando(c.nota_atualizada_em));
+  card.innerHTML =
+    '<div class="hora">✂️</div>' +
+    '<div class="quem">' +
+      '<div class="paciente">' + escapa(c.paciente) + '</div>' +
+      '<div class="meta"><span class="esp">' + escapa(c.especialidade) + '</span></div>' +
+    '</div>' +
+    '<div class="sit ' + meta.cls + '"><span class="rotulo">' + escapa(meta.rot) + '</span>' +
+      '<div class="detalhe">' + det.join("<br>") + '</div></div>';
+  var acoes = document.createElement("div"); acoes.className = "acoes";
+  if(c.alvo_agendamento_id){
+    var lk = document.createElement("a");
+    lk.className = "fone"; lk.target = "_blank"; lk.rel = "noopener";
+    lk.href = "https://app.feegow.com/main/?P=Agenda-1&Pers=1&AgendamentoID=" + c.alvo_agendamento_id;
+    lk.innerHTML = "🎯 abrir o PRÓXIMO no Feegow";
+    lk.title = "Abre direto no agendamento a apagar — dele em diante";
+    acoes.appendChild(lk);
+  }
+  var cel = primeiroCelular(c.celulares_raw, c.telefones_raw);
+  if(cel) acoes.appendChild(botaoFone(cel));
+  var bEx = document.createElement("button"); bEx.type = "button";
+  bEx.className = "fone"; bEx.innerHTML = "✂️ Excluí no Feegow";
+  bEx.title = "Assinar que os futuros foram apagados (este e os próximos)";
+  bEx.onclick = function(){
+    if(!autora()){ alert("Entre com seu PIN primeiro — a assinatura precisa de nome."); return; }
+    if(!confirm("Confirmar: os agendamentos futuros de " + c.paciente + " (" + c.especialidade + ") foram apagados no Feegow?")) return;
+    bEx.disabled = true;
+    salvarCorteNota(c.oc_ref, { tratamento: "excluido", indulto_ate: null },
+      function(ok){ if(!ok){ bEx.disabled = false; alert("Não consegui salvar — tente de novo."); } });
+  };
+  acoes.appendChild(bEx);
+  var bIn = document.createElement("button"); bIn.type = "button";
+  bIn.className = "fone"; bIn.innerHTML = "🕊️ Indulto…";
+  bIn.title = "Segurar o corte por alguns dias (assinado)";
+  bIn.onclick = function(){
+    if(!autora()){ alert("Entre com seu PIN primeiro — o indulto é assinado."); return; }
+    var d = parseInt(window.prompt("Não cortar por quantos dias? (1 a 14)", "3"), 10);
+    if(!d || d < 1 || d > 14) return;
+    var ate = new Date(); ate.setDate(ate.getDate() + d);
+    var iso = ate.getFullYear() + "-" + String(ate.getMonth()+1).padStart(2,"0") + "-" + String(ate.getDate()).padStart(2,"0");
+    var motivo = window.prompt("Motivo do indulto (fica registrado):", "") || "";
+    salvarCorteNota(c.oc_ref, { tratamento: "indulto", indulto_ate: iso, nota: motivo }, null);
+  };
+  acoes.appendChild(bIn);
+  card.appendChild(acoes);
+  return card;
+}
+
+/* ── 📵 dados ── */
+function loadFalhas(){
+  fetch(GCFG.url + "/rest/v1/conf_falhas?select=*", { headers: cab() })
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(rows){ estado.falhas = rows || []; estado.falhasErro = "";
+                          if(estado.tela === "falhas") desenharFalhas(); badgesTopo(); })
+    .catch(function(e){ estado.falhasErro = String(e.message||e);
+                        if(estado.tela === "falhas") desenharFalhas(); });
+}
+
+/* ── 📵 textos (espelho do kit v1.7 / robô v1.9 — mudou lá, muda aqui) ── */
+var TPL_AVISOS = {
+  "OK": "✅ Sua guia está em dia — é só chegar que a gente cuida do resto.",
+  "3 SESSÕES RESTANTES": "Sua guia tem *3 sessões* restantes. Vale já pedir a renovação com seu médico ou na Unimed — assim seus horários seguem garantidos, sem correria.",
+  "2 SESSÕES RESTANTES": "Sua guia tem só *2 sessões* restantes. Sem guia nova registrada, os horários fixos são liberados quando ela acabar. Se puder, adiante a renovação esta semana.",
+  "ÚLTIMA SESSÃO": "⚠️ Esta é a *última sessão* da sua guia. Se a guia nova não entrar no sistema *até as 21h do dia da consulta* (aos sábados, *11h*), os próximos horários são liberados automaticamente. Já solicitou? Responda esta mensagem que a gente confere junto.",
+  "VENCE EM 10 A 15 DIAS": "A validade da sua guia está chegando ao fim. Já dá pra pedir a atualização da data na Unimed com calma.",
+  "VENCE EM MENOS DE 10 DIAS": "Sua guia vence em *menos de 10 dias*. Peça a atualização da validade na Unimed pra seus horários seguirem garantidos.",
+  "VENCE EM 3 DIAS OU MENOS": "⚠️ Sua guia vence em *3 dias ou menos* — e guia vencida sai da agenda. Fale com a Unimed *hoje* pra atualizar a validade e manter seus horários.",
+  "GUIA VENCIDA": "Sua guia está *vencida* — e guia vencida sai da agenda. Fale com a Unimed pra atualizar a validade ou solicite guia nova com seu médico. Dúvidas, é só responder aqui."
+};
+function linkConfirmacao(id){ return "https://api.feegow.com.br/confirmation/" + id + ":1005416"; }
+function textoFalha(f){
+  var nome = f.nome_paciente || "paciente";
+  var abre = "Oi, " + nome + "! Aqui é do Centro Médico JF / Lev Soul 🤍\n\n";
+  if(f.tipo === "lembrete"){
+    return abre +
+      "Lembrete do seu atendimento de *hoje, " + (f.data_fmt||"") + "*, às *" + (f.horario||"") + "*, com *" +
+      (f.profissional||"—") + "* (" + (f.especialidade||"—") + ").\n\n" +
+      "Qualquer imprevisto, é só responder esta mensagem.\n\n" +
+      "Pra confirmar ou desmarcar, é só tocar aqui:\n" + linkConfirmacao(f.agendamento_id) + "\n\nAté daqui a pouco.";
+  }
+  var corpo = abre +
+    "Passando pra confirmar seu atendimento:\n\n" +
+    "📅 *" + (f.data_fmt||"") + "*, às *" + (f.horario||"") + "*\n" +
+    "Profissional: *" + (f.profissional||"—") + "* · " + (f.especialidade||"—") + "\n" +
+    "Local: Rua Caetano Puglise, 170 – Jundiaí, Anápolis\n\n";
+  if(f.usa_template_guia){
+    corpo += "—\n*Sua guia Unimed*\n" +
+      "Sessões disponíveis: *" + (f.qt_atual!=null ? f.qt_atual : "—") + "*\n" +
+      "Válida até: *" + (f.validade_fmt||"—") + "*\n" +
+      (TPL_AVISOS[f.situacao] || "") + "\n—\n\n";
+  }
+  corpo += "Pra *confirmar ou desmarcar*, é só tocar no link:\n" + linkConfirmacao(f.agendamento_id) +
+    "\n\nQualquer imprevisto, responda esta mensagem que a gente encontra junto o melhor caminho.";
+  return corpo;
+}
+
+/* ── 📵 tela ── */
+function desenharFalhas(){
+  var host = document.getElementById("gv-corpo"); if(!host) return;
+  host.innerHTML = "";
+  var topo = document.createElement("div"); topo.className = "gv-explica";
+  topo.innerHTML =
+    "<b>📵 Mensagens que o robô NÃO conseguiu entregar</b> (consultas de hoje em diante). " +
+    "A regra da casa: <b>ninguém sai da agenda sem ter sido avisado</b> — então é a recepção quem manda na mão: " +
+    "<b>copiar o número</b>, achar a conversa na plataforma, <b>copiar a mensagem pronta</b> e enviar. " +
+    "SEM CELULAR = completar o cadastro primeiro.";
+  host.appendChild(topo);
+  if(estado.falhasErro){
+    var er = document.createElement("p"); er.className = "gv-vazio";
+    er.textContent = "⚠️ " + estado.falhasErro + " — o 11_SQL_CORTE.sql já rodou no banco?";
+    host.appendChild(er); return;
+  }
+  if(estado.falhas === null){
+    var lo = document.createElement("p"); lo.className = "gv-vazio";
+    lo.textContent = "Carregando…"; host.appendChild(lo); return;
+  }
+  if(!estado.falhas.length){
+    var ok = document.createElement("p"); ok.className = "gv-vazio";
+    ok.textContent = "📵 Nenhuma falha — todas as mensagens do período chegaram.";
+    host.appendChild(ok); return;
+  }
+  estado.falhas.forEach(function(f){ host.appendChild(cardFalha(f)); });
+}
+function cardFalha(f){
+  var semCel = (f.status_envio === "SEM CELULAR");
+  var card = document.createElement("article");
+  card.className = "card " + (semCel ? "g0" : "g1");
+  var det = [];
+  det.push("consulta <b>" + escapa(f.data_fmt||"") + "</b> às <b>" + escapa(f.horario||"") + "</b> · " + escapa(f.profissional||"—"));
+  det.push("mensagem: <b>" + escapa(f.tipo) + "</b> · falha: <b>" + escapa(f.status_envio) + "</b>" +
+           (f.erro_detalhe ? ' <span class="mono">(' + escapa(String(f.erro_detalhe).slice(0,80)) + ')</span>' : ""));
+  if(f.ultima_tentativa) det.push("última tentativa " + fmtQuando(f.ultima_tentativa));
+  if(semCel) det.push("<b>cadastro sem celular</b> — completar no Feegow antes de qualquer coisa");
+  card.innerHTML =
+    '<div class="hora">' + escapa(f.horario||"—") + '</div>' +
+    '<div class="quem">' +
+      '<div class="paciente">' + escapa(f.nome_paciente||("ID:"+f.paciente_id)) + '</div>' +
+      '<div class="meta"><span class="esp">' + escapa(f.especialidade||"—") + '</span></div>' +
+    '</div>' +
+    '<div class="sit ' + (semCel ? "s0" : "s1") + '"><span class="rotulo">' + (semCel ? "Sem celular" : "Envio falhou") + '</span>' +
+      '<div class="detalhe">' + det.join("<br>") + '</div></div>';
+  var acoes = document.createElement("div"); acoes.className = "acoes";
+  var cel = primeiroCelular(f.celulares_raw, f.telefones_raw);
+  if(cel) acoes.appendChild(botaoFone(cel));
+  var bMsg = document.createElement("button"); bMsg.type = "button";
+  bMsg.className = "fone"; bMsg.innerHTML = "📋 copiar a mensagem pronta";
+  bMsg.title = "O texto do padrão novo, com os dados deste paciente preenchidos";
+  bMsg.onclick = function(){
+    var txt = textoFalha(f);
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+      .then(function(){ bMsg.innerHTML = "✔ copiada — é só colar na conversa"; },
+            function(){ window.prompt("Copie a mensagem:", txt); });
+    setTimeout(function(){ bMsg.innerHTML = "📋 copiar a mensagem pronta"; }, 2200);
+  };
+  acoes.appendChild(bMsg);
+  card.appendChild(acoes);
+  return card;
+}
+
 function trocaTela(t){
   if(t === "dono" && !ehDono()) t = "agenda";
   estado.tela = t;
@@ -2392,13 +2673,15 @@ function trocaTela(t){
   else if(t === "fila"){ desenharFila(); carregarFila(); }
   else if(t === "cad"){ desenharCad(); loadCad(); }
   else if(t === "excl"){ desenharExcl(); loadExcl(); }
+  else if(t === "corte"){ desenharCorte(); loadCorte(); }
+  else if(t === "falhas"){ desenharFalhas(); loadFalhas(); }
   else if(t === "dono"){ desenharAdmin(); }
 }
 function refreshDonoAba(){
   var el = document.getElementById("gv-aba-dono");
   if(el) el.style.display = ehDono() ? "" : "none";
 }
-function recarregarTudo(){ carregar(); carregarFila(); loadCad(); loadExcl(); }
+function recarregarTudo(){ carregar(); carregarFila(); loadCad(); loadExcl(); loadCorte(); loadFalhas(); }
 function boot(){
   if(!GV._init){
     GV._init = true;
