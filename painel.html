@@ -1104,6 +1104,9 @@ loadLoginUsers();
   padding:8px 13px;font:700 13px 'Archivo','Plus Jakarta Sans',sans-serif;color:var(--tinta-2);cursor:pointer;transition:all .15s}
 #s-guias .gv-aba:hover{border-color:var(--tinta-2)}
 #s-guias .gv-aba.on{background:var(--tinta);border-color:var(--tinta);color:#fff}
+#s-guias .gv-explica{background:var(--cartao);border:1.5px solid var(--linha);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.55}
+#s-guias .gv-vazio{padding:22px 12px;text-align:center;color:var(--tinta-2);font-size:13.5px}
+#s-guias button.fone{cursor:pointer}
 #s-guias .gv-b{position:absolute;top:-7px;right:-6px;min-width:19px;height:19px;border-radius:10px;
   background:var(--critico);color:#fff;font:700 11px/19px 'Archivo';padding:0 5px}
 #s-guias .gv-esp{flex:1}
@@ -1611,7 +1614,7 @@ function fmtQuando(iso){
          d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 }
 function tratada(l){ return l.tratamento === "resolvido" || l.tratamento === "desmarcado"; }
-function ehPendencia(l){ return l.gravidade === 0 && !tratada(l); }          /* v2: só o VERMELHO */
+function ehPendencia(l){ return (l.gravidade === 0 || l.corte_hoje === true) && !tratada(l); } /* v2: só o VERMELHO · v2.1: + o amarelo do DIA do corte */
 function ehAviso(l){ return l.situacao !== "coberto" && l.gravidade !== 0 && !tratada(l); }
 function cadAberto(c){ return !c.tratamento || c.tratamento === "pendente"; }
 function exclAberta(x){ return (!x.tratamento || x.tratamento === "pendente") || x.aguardando_dono === true; }
@@ -2453,7 +2456,7 @@ function salvarCorteNota(ref, campos, aoSalvar){
 
 /* ── ✂️ tela ── */
 function desenharCorte(){
-  var host = document.getElementById("gv-corpo"); if(!host) return;
+  var host = document.getElementById("gv-conteudo"); if(!host) return;
   host.innerHTML = "";
   var topo = document.createElement("div"); topo.className = "gv-explica";
   topo.innerHTML =
@@ -2596,7 +2599,7 @@ function textoFalha(f){
 
 /* ── 📵 tela ── */
 function desenharFalhas(){
-  var host = document.getElementById("gv-corpo"); if(!host) return;
+  var host = document.getElementById("gv-conteudo"); if(!host) return;
   host.innerHTML = "";
   var topo = document.createElement("div"); topo.className = "gv-explica";
   topo.innerHTML =
