@@ -3028,7 +3028,8 @@ function fx4MaloteCard(m){
     var fonte = (ult && ult.veredito) ? ult :
                 (conf ? { veredito: conf.veredito, problemas: conf.problemas || [],
                           qt_guias: conf.qt_guias, qt_linhas: conf.qt_linhas,
-                          valor_total: conf.valor_total, removidas: (conf.resumo||{}).removidas } : null);
+                          valor_total: conf.valor_total, removidas: (conf.resumo||{}).removidas,
+                          f0_espelhadas: (conf.resumo||{}).f0_espelhadas } : null);
     if(fonte){
       if(fonte.veredito === "ok"){
         var okb = document.createElement("div"); okb.className = "fx4-okbox";
@@ -3036,6 +3037,9 @@ function fx4MaloteCard(m){
           fonte.qt_linhas + " sessões · " + fx4Dinheiro(fonte.valor_total) +
           ((fonte.removidas && fonte.removidas.length)
             ? "<br>✂️ rejeição registrada: guia(s) " + escapa(fonte.removidas.join(", ")) + " fora do lote."
+            : "") +
+          (((fonte.f0_espelhadas|0) > 0)
+            ? "<br>🪞 " + fonte.f0_espelhadas + " linha(s) do faturamento espelhada(s) no que o malote realmente faturou (código/guia/senha/valor)."
             : "") +
           "<br>As sessões já estão <b>em lote</b> no faturamento. Agora é subir no SGU.";
         card.appendChild(okb);
