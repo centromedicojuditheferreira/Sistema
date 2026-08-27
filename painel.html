@@ -188,6 +188,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
     <button class="gv-aba" data-tela="excl">🗑️ Exclusões<span class="gv-b" id="gv-b-excl" hidden>0</span></button>
     <button class="gv-aba" data-tela="corte">✂️ Corte<span class="gv-b" id="gv-b-corte" hidden>0</span></button>
     <button class="gv-aba" data-tela="falhas">📵 Falhas<span class="gv-b" id="gv-b-falhas" hidden>0</span></button>
+    <button class="gv-aba" data-tela="malotes">📦 Malotes<span class="gv-b" id="gv-b-malotes" hidden>0</span></button>
     <button class="gv-aba" data-tela="dono" id="gv-aba-dono" style="display:none">👑 Dono</button>
     <span class="gv-esp"></span>
     <input class="gv-busca" id="gv-busca" type="search" placeholder="Buscar paciente…" aria-label="Buscar paciente">
@@ -1269,6 +1270,29 @@ loadLoginUsers();
 
 <!-- ═══════════════ GUIAS DA AGENDA · MÓDULO GV (Supabase) ═══════════════ -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ── F4 · Malotes ── */
+#s-guias .fx4-sec{margin:14px 0 6px;font:700 14px Archivo,sans-serif;letter-spacing:.2px}
+#s-guias .fx4-card{background:var(--cartao);border:1px solid var(--linha);border-left:5px solid var(--neutro);
+  border-radius:10px;padding:12px 14px;margin:8px 0}
+#s-guias .fx4-card.ok{border-left-color:var(--bom, #2e7d32)}
+#s-guias .fx4-card.ruim{border-left-color:var(--critico)}
+#s-guias .fx4-card.meio{border-left-color:var(--alerta)}
+#s-guias .fx4-tit{font:700 13.5px Archivo,sans-serif;margin-bottom:4px}
+#s-guias .fx4-meta{font-size:12.5px;color:var(--tinta-2);margin-bottom:6px;line-height:1.5}
+#s-guias .fx4-nums{width:100%;box-sizing:border-box;font:600 12.5px "IBM Plex Mono",monospace;
+  background:var(--fundo, #fafafa);border:1px dashed var(--linha);border-radius:8px;
+  padding:8px;resize:vertical;min-height:96px}
+#s-guias .fx4-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#s-guias .fx4-prob{font-size:12.5px;line-height:1.55;background:rgba(200,40,40,.06);
+  border:1px solid rgba(200,40,40,.25);border-radius:8px;padding:8px 10px;margin-top:8px;
+  max-height:300px;overflow:auto}
+#s-guias .fx4-prob b{font-family:"IBM Plex Mono",monospace}
+#s-guias .fx4-okbox{font-size:12.5px;background:rgba(46,125,50,.07);
+  border:1px solid rgba(46,125,50,.3);border-radius:8px;padding:8px 10px;margin-top:8px}
+#s-guias .fx4-badge{display:inline-block;font:700 11px Archivo,sans-serif;border-radius:99px;
+  padding:2px 9px;margin-left:6px;border:1px solid var(--linha);vertical-align:middle}
+</style>
 <script>
 var GV = (function(){
 "use strict";
@@ -1321,6 +1345,7 @@ var estado = { linhas:[], filtroDia:null, filtroSit:"pendencias", filtroTipo:nul
                tela:"agenda", fila:null, filaErro:"", filaDraft:"", _filaJson:"",
                cad:null, cadErro:"", excl:null, exclErro:"", donoModo:"resumo",
                corte:null, corteErro:"", falhas:null, falhasErro:"",
+               malotes:null, malotesErro:"", malotesUlt:{},
                _carregouEm:0 };
 
 /* ═══ REST ═══ */
@@ -2660,6 +2685,480 @@ function cardFalha(f){
   return card;
 }
 
+/* ═══════════════════ 📦 MALOTES (F4) ═══════════════════ */
+/* Parser TISS 4.03 — espelho fiel do subir_malotes.py, testado contra o
+   lote 50 real (35 guias · 35 linhas · R$ 2.020,00). */
+var FX4NS = "http://www.ans.gov.br/padroes/tiss/schemas";
+function fx4Tag(el, nome){
+  if(!el) return null;
+  var ns = el.getElementsByTagNameNS(FX4NS, nome);
+  if(!ns.length) return null;
+  var t = (ns[0].textContent || "").trim();
+  return t === "" ? null : t;
+}
+function fx4TagFilho(el, caminho){
+  var cur = el;
+  for(var i=0;i<caminho.length;i++){
+    if(!cur) return null;
+    var f = cur.getElementsByTagNameNS(FX4NS, caminho[i]);
+    cur = f.length ? f[0] : null;
+  }
+  if(!cur) return null;
+  var t = (cur.textContent || "").trim();
+  return t === "" ? null : t;
+}
+function fx4Num(s){ if(s===null||s===undefined||s==="") return null;
+  var v = parseFloat(s); return isNaN(v) ? null : v; }
+
+function fx4ParseXML(texto, nomeArquivo){
+  var doc = new DOMParser().parseFromString(texto, "text/xml");
+  var erro = doc.getElementsByTagName("parsererror");
+  if(erro && erro.length) throw new Error("XML ilegível: " + String(erro[0].textContent||"").slice(0,120));
+  var cab2 = doc.getElementsByTagNameNS(FX4NS, "cabecalho")[0];
+  var idt  = cab2 ? cab2.getElementsByTagNameNS(FX4NS, "identificacaoTransacao")[0] : null;
+  var lote = doc.getElementsByTagNameNS(FX4NS, "loteGuias")[0];
+  if(!lote) throw new Error("XML sem loteGuias — isso é um malote TISS?");
+  var semExt = (nomeArquivo||"").replace(/\.xml$/i, "");
+  var base = {
+    numero_lote:             fx4Tag(lote, "numeroLote"),
+    nome_beneficiario:       semExt,
+    arquivo_origem:          nomeArquivo || null,
+    tipo_transacao:          fx4Tag(idt, "tipoTransacao"),
+    sequencial_transacao:    fx4Tag(idt, "sequencialTransacao"),
+    data_registro_transacao: fx4Tag(idt, "dataRegistroTransacao"),
+    hora_registro_transacao: fx4Tag(idt, "horaRegistroTransacao"),
+    codigo_prestador_origem: fx4TagFilho(cab2, ["origem","identificacaoPrestador","codigoPrestadorNaOperadora"]),
+    registro_ans_destino:    fx4TagFilho(cab2, ["destino","registroANS"]),
+    padrao:                  fx4Tag(cab2, "Padrao"),
+    hash:                    fx4TagFilho(doc.documentElement, ["epilogo","hash"])
+  };
+  var linhas = [];
+  var guias = lote.getElementsByTagNameNS(FX4NS, "guiaSP-SADT");
+  for(var g=0; g<guias.length; g++){
+    var G = guias[g];
+    var sol = null;
+    var ds = G.getElementsByTagNameNS(FX4NS, "dadosSolicitante");
+    if(ds.length){
+      var ps = ds[0].getElementsByTagNameNS(FX4NS, "profissionalSolicitante");
+      sol = ps.length ? ps[0] : null;
+    }
+    var vt = G.getElementsByTagNameNS(FX4NS, "valorTotal");
+    vt = vt.length ? vt[vt.length-1] : null;
+    var bg = {};
+    for(var k in base) bg[k] = base[k];
+    bg.registro_ans_guia           = fx4TagFilho(G, ["cabecalhoGuia","registroANS"]);
+    bg.numero_guia_prestador       = fx4TagFilho(G, ["cabecalhoGuia","numeroGuiaPrestador"]);
+    bg.numero_guia_operadora       = fx4TagFilho(G, ["dadosAutorizacao","numeroGuiaOperadora"]);
+    bg.data_autorizacao            = fx4TagFilho(G, ["dadosAutorizacao","dataAutorizacao"]);
+    bg.senha                       = fx4TagFilho(G, ["dadosAutorizacao","senha"]);
+    bg.data_validade_senha         = fx4TagFilho(G, ["dadosAutorizacao","dataValidadeSenha"]);
+    bg.numero_carteira             = fx4TagFilho(G, ["dadosBeneficiario","numeroCarteira"]);
+    bg.atendimento_rn              = fx4TagFilho(G, ["dadosBeneficiario","atendimentoRN"]);
+    bg.tipo_ident                  = fx4TagFilho(G, ["dadosBeneficiario","tipoIdent"]);
+    bg.cod_prestador_solicitante   = fx4TagFilho(G, ["dadosSolicitante","contratadoSolicitante","codigoPrestadorNaOperadora"]);
+    bg.nome_contratado_solicitante = fx4TagFilho(G, ["dadosSolicitante","nomeContratadoSolicitante"]);
+    bg.prof_solicitante_nome       = fx4Tag(sol, "nomeProfissional");
+    bg.prof_solicitante_conselho   = fx4Tag(sol, "conselhoProfissional");
+    bg.prof_solicitante_numero     = fx4Tag(sol, "numeroConselhoProfissional");
+    bg.prof_solicitante_uf         = fx4Tag(sol, "UF");
+    bg.prof_solicitante_cbos       = fx4Tag(sol, "CBOS");
+    bg.data_solicitacao            = fx4TagFilho(G, ["dadosSolicitacao","dataSolicitacao"]);
+    bg.carater_atendimento         = fx4TagFilho(G, ["dadosSolicitacao","caraterAtendimento"]);
+    bg.indicacao_clinica           = fx4TagFilho(G, ["dadosSolicitacao","indicacaoClinica"]);
+    bg.cod_prestador_executante    = fx4TagFilho(G, ["dadosExecutante","contratadoExecutante","codigoPrestadorNaOperadora"]);
+    bg.cnes                        = fx4TagFilho(G, ["dadosExecutante","CNES"]);
+    bg.tipo_atendimento            = fx4TagFilho(G, ["dadosAtendimento","tipoAtendimento"]);
+    bg.indicacao_acidente          = fx4TagFilho(G, ["dadosAtendimento","indicacaoAcidente"]);
+    bg.regime_atendimento          = fx4TagFilho(G, ["dadosAtendimento","regimeAtendimento"]);
+    bg.valor_procedimentos         = fx4Num(fx4Tag(vt, "valorProcedimentos"));
+    bg.valor_diarias               = fx4Num(fx4Tag(vt, "valorDiarias"));
+    bg.valor_taxas_alugueis        = fx4Num(fx4Tag(vt, "valorTaxasAlugueis"));
+    bg.valor_materiais             = fx4Num(fx4Tag(vt, "valorMateriais"));
+    bg.valor_medicamentos          = fx4Num(fx4Tag(vt, "valorMedicamentos"));
+    bg.valor_opme                  = fx4Num(fx4Tag(vt, "valorOPME"));
+    bg.valor_gases_medicinais      = fx4Num(fx4Tag(vt, "valorGasesMedicinais"));
+    bg.valor_total_geral           = fx4Num(fx4Tag(vt, "valorTotalGeral"));
+    var procs = G.getElementsByTagNameNS(FX4NS, "procedimentoExecutado");
+    for(var p=0; p<procs.length; p++){
+      var P = procs[p];
+      var eqs = P.getElementsByTagNameNS(FX4NS, "equipeSadt");
+      var eq = eqs.length ? eqs[0] : null;
+      var L = {};
+      for(var k2 in bg) L[k2] = bg[k2];
+      L.sequencial_item        = fx4Tag(P, "sequencialItem");
+      L.data_execucao          = fx4Tag(P, "dataExecucao");
+      L.hora_inicial           = fx4Tag(P, "horaInicial");
+      L.hora_final             = fx4Tag(P, "horaFinal");
+      L.codigo_tabela          = fx4TagFilho(P, ["procedimento","codigoTabela"]);
+      L.codigo_procedimento    = fx4TagFilho(P, ["procedimento","codigoProcedimento"]);
+      L.descricao_procedimento = fx4TagFilho(P, ["procedimento","descricaoProcedimento"]);
+      L.quantidade_executada   = fx4Num(fx4Tag(P, "quantidadeExecutada"));
+      L.via_acesso             = fx4Tag(P, "viaAcesso");
+      L.tecnica_utilizada      = fx4Tag(P, "tecnicaUtilizada");
+      L.reducao_acrescimo      = fx4Num(fx4Tag(P, "reducaoAcrescimo"));
+      L.valor_unitario         = fx4Num(fx4Tag(P, "valorUnitario"));
+      L.valor_total            = fx4Num(fx4Tag(P, "valorTotal"));
+      L.grau_part              = fx4Tag(eq, "grauPart");
+      L.prof_exec_cpf          = fx4TagFilho(eq, ["codProfissional","cpfContratado"]);
+      L.prof_exec_nome         = fx4Tag(eq, "nomeProf");
+      L.prof_exec_conselho     = fx4Tag(eq, "conselho");
+      L.prof_exec_numero       = fx4Tag(eq, "numeroConselhoProfissional");
+      L.prof_exec_uf           = fx4Tag(eq, "UF");
+      L.prof_exec_cbos         = fx4Tag(eq, "CBOS");
+      linhas.push(L);
+    }
+  }
+  return { numero_lote: base.numero_lote, linhas: linhas };
+}
+
+/* ── infra ── */
+function fx4Rpc(fn, corpo){
+  return fetch(GCFG.url + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: cab({"Content-Type":"application/json"}),
+    body: JSON.stringify(corpo)
+  }).then(function(r){
+    return r.text().then(function(t){
+      var j = null; try{ j = JSON.parse(t); }catch(e){}
+      if(!r.ok){
+        var msg = (j && (j.message || j.hint || j.details)) || ("HTTP " + r.status);
+        throw new Error(msg);
+      }
+      return j;
+    });
+  });
+}
+function fx4Dinheiro(v){
+  if(v === null || v === undefined) return "—";
+  return "R$ " + Number(v).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+function fx4Data(iso){
+  if(!iso) return "—";
+  var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3] + "/" + m[2] + "/" + m[1].slice(2)) : String(iso);
+}
+function fx4PedeXML(cb){
+  var i = document.createElement("input");
+  i.type = "file"; i.accept = ".xml,text/xml";
+  i.onchange = function(){ if(i.files && i.files[0]) cb(i.files[0]); };
+  i.click();
+}
+function fx4LerArquivo(file, cb, cbErro){
+  var fr = new FileReader();
+  fr.onload  = function(){ cb(fr.result); };
+  fr.onerror = function(){ cbErro(new Error("não consegui ler o arquivo")); };
+  fr.readAsText(file, "ISO-8859-1");   /* o TISS da Unimed sai em ISO-8859-1 */
+}
+
+/* ── dados ── */
+function loadMalotes(){
+  var q = function(rota){
+    return fetch(GCFG.url + "/rest/v1/" + rota, { headers: cab() })
+      .then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status + " — o fx4_sql_modulo_malotes.sql já rodou no banco?");
+        return r.json();
+      });
+  };
+  Promise.all([
+    q("fx4_fila_malote?select=*"),
+    q("fx4_malotes?select=*&estado=neq.enviado&order=id.desc"),
+    q("fx4_rejeicoes_sgu?select=*&order=criada_em.desc&limit=100"),
+    q("fx4_conferencias_xml?select=malote_id,veredito,problemas,resumo,arquivo,qt_guias,qt_linhas,valor_total,conferida_em&order=id.desc&limit=60")
+  ]).then(function(res){
+    estado.malotes = { fila: res[0], vivos: res[1], rej: res[2], confs: res[3] };
+    estado.malotesErro = "";
+    var b = document.getElementById("gv-b-malotes");
+    if(b){
+      var pend = res[1].length + res[2].filter(function(r){ return !r.tratada; }).length;
+      b.textContent = pend; b.hidden = (pend === 0);
+    }
+    if(estado.tela === "malotes") desenharMalotes();
+  }).catch(function(e){
+    estado.malotesErro = e.message || String(e);
+    if(estado.tela === "malotes") desenharMalotes();
+  });
+}
+function fx4UltConf(mid){
+  var cs = (estado.malotes && estado.malotes.confs) || [];
+  for(var i=0;i<cs.length;i++) if(cs[i].malote_id === mid) return cs[i];
+  return null;
+}
+
+/* ── ações ── */
+function fx4Fechar(convId, prestadores){
+  var rot = (convId === 8) ? "Intercâmbio" : "Local";
+  if(!confirm("Assinar o X do MALOTE FECHADO?\n\n" + rot + " · " + prestadores.length +
+      " guia(s).\n\nIsso congela a lista: as guias saem da fila e o malote passa a esperar o XML."))
+    return;
+  fx4Rpc("fx4_marcar_fechado", { p_convenio_id: convId, p_prestadores: prestadores, p_quem: autora() })
+    .then(function(){ loadMalotes(); })
+    .catch(function(e){ alert("Não deu pra fechar o malote:\n" + e.message); });
+}
+function fx4Conferir(m, file, observacao){
+  fx4LerArquivo(file, function(texto){
+    var r;
+    try { r = fx4ParseXML(texto, file.name); }
+    catch(e){ alert("Problema no arquivo:\n" + e.message); return; }
+    if(!r.linhas.length){ alert("O XML não tem nenhuma linha de procedimento."); return; }
+    estado.malotesUlt[m.id] = { rodando: true };
+    desenharMalotes();
+    fx4Rpc("fx4_conferir_xml", {
+      p_malote_id: m.id, p_linhas: r.linhas, p_arquivo: file.name,
+      p_quem: autora(), p_observacao: observacao || null
+    }).then(function(res){
+      estado.malotesUlt[m.id] = res;
+      loadMalotes();
+    }).catch(function(e){
+      estado.malotesUlt[m.id] = { erro: e.message };
+      desenharMalotes();
+    });
+  }, function(e){ alert(e.message); });
+}
+function fx4Correcao(m){
+  var obs = window.prompt(
+    "CORREÇÃO PÓS-SGU\n\nCole aqui O QUE O SGU FALOU (o motivo da rejeição).\n" +
+    "Guia que sumir do XML novo vira rejeição registrada com este motivo — e a linha volta pra conferência (F3) corrigir.", "");
+  if(obs === null) return;
+  if(!obs.trim()){ alert("Sem o motivo do SGU não dá — é ele que vai pra análise do dono."); return; }
+  fx4PedeXML(function(file){ fx4Conferir(m, file, obs.trim()); });
+}
+function fx4Enviado(m){
+  if(!confirm("Confirmar: o SGU ACEITOU o lote " + (m.numero_lote || "?") + "?\n\n" +
+      "Isso carimba a data de envio e é DEFINITIVO — se o SGU acusou qualquer problema, use Correção antes."))
+    return;
+  fx4Rpc("fx4_marcar_enviado", { p_malote_id: m.id, p_quem: autora() })
+    .then(function(){ delete estado.malotesUlt[m.id]; loadMalotes(); })
+    .catch(function(e){ alert("Não deu pra marcar enviado:\n" + e.message); });
+}
+function fx4Tratar(r){
+  var nota = window.prompt("Marcar como tratada. Nota (opcional):", "");
+  if(nota === null) return;
+  fx4Rpc("fx4_tratar_rejeicao", { p_id: r.id, p_quem: autora(), p_nota: nota.trim() || null })
+    .then(function(){ loadMalotes(); })
+    .catch(function(e){ alert(e.message); });
+}
+
+/* ── desenho ── */
+function fx4RotEstado(e){
+  return { fechado:                 ["Fechado — esperando o XML do lote", "meio"],
+           conferido_ok:            ["Conferido ✔ — pronto pro SGU",      "ok"],
+           conferido_com_problemas: ["Barrado na conferência",            "ruim"],
+           em_correcao:             ["Aguardando XML corrigido",          "ruim"] }[e] || [e, "meio"];
+}
+function fx4BlocoCard(convId, rot, bloco, guias){
+  var card = document.createElement("article");
+  card.className = "fx4-card";
+  var nums = guias.map(function(g){ return g.numero_guia_prestador; });
+  var soma = guias.reduce(function(a,g){ return a + (Number(g.valor_esperado_total)||0); }, 0);
+  var d1 = guias[0].data_mais_antiga, d2 = guias[guias.length-1].data_mais_antiga;
+  card.innerHTML =
+    '<div class="fx4-tit">📦 ' + escapa(rot) + ' · Bloco ' + bloco +
+      '<span class="fx4-badge">' + guias.length + ' guia' + (guias.length>1?'s':'') + '</span></div>' +
+    '<div class="fx4-meta">datas mais antigas ' + fx4Data(d1) + ' → ' + fx4Data(d2) +
+      ' · valor esperado ' + fx4Dinheiro(soma) +
+      ' · <b>ordem de faturamento: a data mais velha primeiro</b></div>';
+  var ta = document.createElement("textarea");
+  ta.className = "fx4-nums"; ta.readOnly = true;
+  ta.rows = Math.min(10, Math.max(4, nums.length));
+  ta.value = nums.join("\n");
+  card.appendChild(ta);
+  var acoes = document.createElement("div"); acoes.className = "fx4-acoes";
+  var bCop = document.createElement("button"); bCop.type="button"; bCop.className="gv-btn";
+  bCop.textContent = "📋 Copiar os números";
+  bCop.onclick = function(){
+    (navigator.clipboard ? navigator.clipboard.writeText(nums.join("\n")) : Promise.reject())
+      .then(function(){ bCop.textContent = "✔ copiados — colar no Feegow"; },
+            function(){ ta.focus(); ta.select(); document.execCommand("copy");
+                        bCop.textContent = "✔ copiados — colar no Feegow"; });
+    setTimeout(function(){ bCop.textContent = "📋 Copiar os números"; }, 2400);
+  };
+  acoes.appendChild(bCop);
+  var bX = document.createElement("button"); bX.type="button"; bX.className="gv-btn";
+  bX.textContent = "✔ Malote fechado no Feegow";
+  bX.title = "Assinar o X: congela esta lista e o malote passa a esperar o XML";
+  bX.onclick = function(){ fx4Fechar(convId, nums); };
+  acoes.appendChild(bX);
+  card.appendChild(acoes);
+  return card;
+}
+function fx4ProbHTML(problemas){
+  if(!problemas || !problemas.length) return "";
+  var porGuia = {};
+  problemas.forEach(function(p){
+    var k = p.guia_prestador || "(geral)";
+    (porGuia[k] = porGuia[k] || []).push(p);
+  });
+  var h = "";
+  Object.keys(porGuia).sort().forEach(function(k){
+    h += "<div style='margin:4px 0'><b>guia " + escapa(k) + "</b>";
+    porGuia[k].forEach(function(p){
+      h += "<br>&nbsp;&nbsp;• <b>" + escapa(p.problema) + "</b>" +
+           (p.codigo ? " · " + escapa(p.codigo) : "") +
+           (p.detalhe ? " — " + escapa(p.detalhe) : "");
+    });
+    h += "</div>";
+  });
+  return h;
+}
+function fx4MaloteCard(m){
+  var re = fx4RotEstado(m.estado);
+  var card = document.createElement("article");
+  card.className = "fx4-card " + re[1];
+  card.innerHTML =
+    '<div class="fx4-tit">Malote #' + m.id +
+      (m.numero_lote ? ' · lote <b>' + escapa(m.numero_lote) + '</b>' : '') +
+      '<span class="fx4-badge">' + escapa((m.convenio_id === 8) ? "Intercâmbio" : "Local") + '</span>' +
+      '<span class="fx4-badge">' + escapa(re[0]) + '</span></div>' +
+    '<div class="fx4-meta">' + m.qt_guias + ' guia(s) congelada(s)' +
+      (m.arquivo ? ' · último XML: <b>' + escapa(m.arquivo) + '</b>' : '') +
+      (m.criado_por ? ' · fechado por ' + escapa(m.criado_por) : '') +
+      ' · ' + fx4Data(m.criado_em) + '</div>';
+
+  var ult = estado.malotesUlt[m.id];
+  var conf = fx4UltConf(m.id);
+  if(ult && ult.rodando){
+    var lo = document.createElement("div"); lo.className = "fx4-meta";
+    lo.innerHTML = "<b>⏳ conferindo o XML contra a raiz…</b>";
+    card.appendChild(lo);
+  } else if(ult && ult.erro){
+    var er = document.createElement("div"); er.className = "fx4-prob";
+    er.innerHTML = "<b>erro na conferência:</b> " + escapa(ult.erro);
+    card.appendChild(er);
+  } else {
+    var fonte = (ult && ult.veredito) ? ult :
+                (conf ? { veredito: conf.veredito, problemas: conf.problemas || [],
+                          qt_guias: conf.qt_guias, qt_linhas: conf.qt_linhas,
+                          valor_total: conf.valor_total, removidas: (conf.resumo||{}).removidas } : null);
+    if(fonte){
+      if(fonte.veredito === "ok"){
+        var okb = document.createElement("div"); okb.className = "fx4-okbox";
+        okb.innerHTML = "<b>✔ Conferência limpa.</b> " + fonte.qt_guias + " guias · " +
+          fonte.qt_linhas + " sessões · " + fx4Dinheiro(fonte.valor_total) +
+          ((fonte.removidas && fonte.removidas.length)
+            ? "<br>✂️ rejeição registrada: guia(s) " + escapa(fonte.removidas.join(", ")) + " fora do lote."
+            : "") +
+          "<br>As sessões já estão <b>em lote</b> no faturamento. Agora é subir no SGU.";
+        card.appendChild(okb);
+      } else {
+        var pr = document.createElement("div"); pr.className = "fx4-prob";
+        pr.innerHTML = "<b>🚫 Barrado.</b> Nada foi gravado — corrigir no Feegow/SGU e subir o XML de novo.<br>" +
+          fx4ProbHTML(fonte.problemas || []);
+        card.appendChild(pr);
+      }
+    }
+  }
+
+  var acoes = document.createElement("div"); acoes.className = "fx4-acoes";
+  if(m.estado !== "conferido_ok"){
+    var bUp = document.createElement("button"); bUp.type="button"; bUp.className="gv-btn";
+    bUp.textContent = "🧾 Conferir o XML do lote";
+    bUp.title = "Baixar o XML no Feegow e subir aqui — a conferência roda na hora, contra a raiz";
+    bUp.onclick = function(){ fx4PedeXML(function(f){ fx4Conferir(m, f, null); }); };
+    acoes.appendChild(bUp);
+  }
+  if(m.estado === "conferido_ok"){
+    var bEnv = document.createElement("button"); bEnv.type="button"; bEnv.className="gv-btn";
+    bEnv.textContent = "📤 Enviado no SGU (aceito)";
+    bEnv.onclick = function(){ fx4Enviado(m); };
+    acoes.appendChild(bEnv);
+  }
+  if(m.estado === "conferido_ok" || m.estado === "em_correcao" || m.estado === "conferido_com_problemas"){
+    var bCor = document.createElement("button"); bCor.type="button"; bCor.className="gv-btn";
+    bCor.textContent = "✂️ Correção (SGU rejeitou guia)";
+    bCor.title = "Sobe o XML corrigido + o motivo do SGU; guia que sumiu vira rejeição registrada";
+    bCor.onclick = function(){ fx4Correcao(m); };
+    acoes.appendChild(bCor);
+  }
+  card.appendChild(acoes);
+  return card;
+}
+function desenharMalotes(){
+  var host = document.getElementById("gv-conteudo"); if(!host) return;
+  host.innerHTML = "";
+  var topo = document.createElement("div"); topo.className = "gv-explica";
+  topo.innerHTML =
+    "<b>📦 Malotes Unimed</b> — o caminho é sempre o mesmo: " +
+    "<b>1)</b> copiar o bloco e fechar o malote no Feegow · " +
+    "<b>2)</b> assinar o <b>✔ Malote fechado</b> (congela a lista) · " +
+    "<b>3)</b> baixar o XML e <b>conferir aqui</b> — só malote 100% limpo segue · " +
+    "<b>4)</b> subir no SGU e marcar <b>📤 Enviado</b> SÓ quando o SGU aceitar. " +
+    "SGU rejeitou guia? <b>✂️ Correção</b> com o motivo — a guia volta pra fila sozinha quando sanar.";
+  host.appendChild(topo);
+
+  if(estado.malotesErro){
+    var er = document.createElement("p"); er.className = "gv-vazio";
+    er.textContent = "⚠️ " + estado.malotesErro;
+    host.appendChild(er); return;
+  }
+  if(estado.malotes === null){
+    var lo = document.createElement("p"); lo.className = "gv-vazio";
+    lo.textContent = "Carregando…"; host.appendChild(lo); return;
+  }
+
+  /* 1 · malotes em andamento */
+  var vivos = estado.malotes.vivos || [];
+  if(vivos.length){
+    var s1 = document.createElement("div"); s1.className = "fx4-sec";
+    s1.textContent = "Malotes em andamento";
+    host.appendChild(s1);
+    vivos.forEach(function(m){ host.appendChild(fx4MaloteCard(m)); });
+  }
+
+  /* 2 · blocos prontos pra fechar */
+  var fila = estado.malotes.fila || [];
+  var s2 = document.createElement("div"); s2.className = "fx4-sec";
+  s2.textContent = "Blocos prontos (guias 100% conferidas, da data mais velha pra mais nova)";
+  host.appendChild(s2);
+  if(!fila.length){
+    var vz = document.createElement("p"); vz.className = "gv-vazio";
+    vz.textContent = "Nenhuma guia pronta agora — a fila enche conforme a conferência (F3) aprova.";
+    host.appendChild(vz);
+  } else {
+    var grupos = {};
+    fila.forEach(function(g){
+      var k = g.convenio_id + "·" + g.bloco;
+      (grupos[k] = grupos[k] || []).push(g);
+    });
+    Object.keys(grupos).sort().forEach(function(k){
+      var gs = grupos[k];
+      host.appendChild(fx4BlocoCard(gs[0].convenio_id, gs[0].convenio, gs[0].bloco, gs));
+    });
+  }
+
+  /* 3 · rejeições do SGU */
+  var rej = estado.malotes.rej || [];
+  var s3 = document.createElement("div"); s3.className = "fx4-sec";
+  s3.textContent = "Rejeições do SGU (análise 1 a 1 do dono)";
+  host.appendChild(s3);
+  if(!rej.length){
+    var vz2 = document.createElement("p"); vz2.className = "gv-vazio";
+    vz2.textContent = "Nenhuma rejeição registrada. Que continue assim.";
+    host.appendChild(vz2);
+  } else {
+    rej.forEach(function(r){
+      var c = document.createElement("article");
+      c.className = "fx4-card " + (r.tratada ? "ok" : "ruim");
+      c.innerHTML =
+        '<div class="fx4-tit">guia ' + escapa(r.numero_guia_prestador) +
+          (r.numero_lote ? ' · lote ' + escapa(r.numero_lote) : '') +
+          '<span class="fx4-badge">' + (r.tratada ? "tratada ✔" : "pendente") + '</span></div>' +
+        '<div class="fx4-meta">' +
+          (r.paciente_nome ? escapa(r.paciente_nome) + ' · ' : '') +
+          fx4Data(r.criada_em) + (r.autora ? ' · por ' + escapa(r.autora) : '') + '</div>' +
+        '<div class="fx4-meta"><b>SGU:</b> ' + escapa(r.motivo_sgu || "—") +
+          (r.nota_dono ? '<br><b>nota do dono:</b> ' + escapa(r.nota_dono) : '') + '</div>';
+      if(!r.tratada && ehDono()){
+        var a = document.createElement("div"); a.className = "fx4-acoes";
+        var b = document.createElement("button"); b.type="button"; b.className="gv-btn";
+        b.textContent = "✔ Marcar tratada";
+        b.onclick = function(){ fx4Tratar(r); };
+        a.appendChild(b); c.appendChild(a);
+      }
+      host.appendChild(c);
+    });
+  }
+}
+
 function trocaTela(t){
   if(t === "dono" && !ehDono()) t = "agenda";
   estado.tela = t;
@@ -2678,13 +3177,14 @@ function trocaTela(t){
   else if(t === "excl"){ desenharExcl(); loadExcl(); }
   else if(t === "corte"){ desenharCorte(); loadCorte(); }
   else if(t === "falhas"){ desenharFalhas(); loadFalhas(); }
+  else if(t === "malotes"){ desenharMalotes(); loadMalotes(); }
   else if(t === "dono"){ desenharAdmin(); }
 }
 function refreshDonoAba(){
   var el = document.getElementById("gv-aba-dono");
   if(el) el.style.display = ehDono() ? "" : "none";
 }
-function recarregarTudo(){ carregar(); carregarFila(); loadCad(); loadExcl(); loadCorte(); loadFalhas(); }
+function recarregarTudo(){ carregar(); carregarFila(); loadCad(); loadExcl(); loadCorte(); loadFalhas(); loadMalotes(); }
 function boot(){
   if(!GV._init){
     GV._init = true;
