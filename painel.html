@@ -3386,7 +3386,9 @@ var MSG = {
   FOTO_INVALIDA:'Não foi possível ler a foto. Tente de novo.', SEM_FOTO:'Esta confirmação não tem foto.',
   SENHA_CURTA:'Senha muito curta.', TELEFONE_INVALIDO:'Telefone inválido — DDD + número, só dígitos.',
   PROFISSIONAL_NAO_EXISTE:'Este profissional não existe no Feegow.', ADMIN_JA_EXISTE:'A senha de administração já foi definida.',
-  HORA_INVALIDA:'Hora inválida — use HH:MM.'
+  HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.',
+  AINDA_NAO_ABRIU:'A conferência desta semana ainda não abriu.', JA_CONFIRMADA:'Esta semana já foi confirmada — aguarde a próxima.',
+  SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.'
 };
 var sess = { id:null, senha:null, nome:null, semanas:[], semana:null, fotoObrigatoria:true };
 var secr = { senha:null, semana:null, semanas:[] };
@@ -3461,8 +3463,8 @@ function entrarPeloLogin(){
     relogioOffset = new Date(r.agora).getTime() - Date.now();
     sess.id = r.profissional_id; sess.senha = senha; sess.nome = r.nome; sess.semanas = r.semanas; sess.semana = r.semana_inicio;
     sess.fotoObrigatoria = r.foto_obrigatoria !== false;
-    document.getElementById('pf-hora-prazo').textContent =
-      new Date(r.prazo).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}).replace(':00','h');
+    sess.horaPrazo = new Date(r.prazo).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}).replace(':00','h');
+    var hp = document.getElementById('pf-hora-prazo'); if(hp) hp.textContent = sess.horaPrazo;
     document.getElementById('lo').style.display = 'none';
     document.getElementById('prof-view').style.display = 'block';
     document.getElementById('pf-nome').textContent = r.nome;
@@ -3484,7 +3486,16 @@ function pintaPrazo(ids, dados, modo){
     box.classList.remove('alerta','passou','fechada');
     var conta = document.getElementById(ids.conta), ate = document.getElementById(ids.ate);
     if(modo === 'prof'){
-      if(agora() > fech.getTime()){ box.classList.add('fechada'); conta.textContent = 'Semana fechada'; ate.textContent = 'Esta semana já foi para o faturamento do jeito que estava.'; return; }
+      if(dados.motivo === 'confirmada'){ box.classList.remove('alerta','passou','fechada'); conta.textContent = 'Semana confirmada ✔'; ate.textContent = 'Confirmada em ' + fmtTs(dados.confirmada_em) + '. A próxima conferência abre ' + fmtDiaHora(dados.proxima_abertura) + '.'; return; }
+      if(dados.motivo === 'antes_da_abertura'){
+        var msA = new Date(dados.abre_em).getTime() - agora();
+        box.classList.add('fechada');
+        var hA = Math.floor(Math.max(0, msA)/36e5), dA = Math.floor(hA/24);
+        conta.textContent = 'Abre ' + fmtDiaHora(dados.abre_em);
+        ate.textContent = msA > 0 ? ('Faltam ' + (dA >= 1 ? dA + ' dia' + (dA>1?'s':'') + ' e ' + (hA%24) + ' h' : hA + ' h') + '. Você recebe um aviso no WhatsApp quando abrir.') : 'Abrindo… recarregue a página.';
+        return;
+      }
+      if(agora() > fech.getTime() || dados.motivo === 'fechada'){ box.classList.add('fechada'); conta.textContent = 'Semana fechada'; ate.textContent = 'Esta semana já foi para o faturamento do jeito que estava.' + (dados.proxima_abertura ? ' A próxima abre ' + fmtDiaHora(dados.proxima_abertura) + '.' : ''); return; }
       if(ms <= 0){ box.classList.add('passou'); conta.textContent = 'Prazo encerrado'; ate.textContent = 'O prazo era ' + fmtDiaHora(dados.prazo) + '. Se ainda houver erro, fale com a secretaria agora.'; return; }
     } else if(ms <= 0){
       box.classList.add('fechada'); conta.textContent = 'Semana fechada';
@@ -3494,7 +3505,7 @@ function pintaPrazo(ids, dados, modo){
     if(h < 24) box.classList.add('alerta');
     conta.textContent = d >= 1 ? ('Faltam ' + d + ' dia' + (d>1?'s':'') + ' e ' + hr + ' h') : (h >= 1 ? ('Faltam ' + h + ' h e ' + min + ' min') : ('Faltam ' + min + ' min'));
     ate.textContent = modo === 'sec' ? ('Fechamento ' + fmtDiaHora(dados.fechamento) + ' · profissionais até ' + fmtDiaHora(dados.prazo))
-                                     : ('Corrija e confirme até ' + fmtDiaHora(dados.prazo) + '.');
+                                     : ('Corrija e confirme até ' + fmtDiaHora(dados.prazo) + '.' + (dados.modo_teste ? ' (modo teste até ' + fmtTs(dados.teste_ate) + ')' : ''));
   };
   render(); clearInterval(contadorTimer); contadorTimer = setInterval(render, 30000);
 }
@@ -3518,7 +3529,8 @@ function carregaSemana(inicio){
     relogioOffset = new Date(d.agora).getTime() - Date.now();
     semanaAtual = d; sess.semana = d.semana_inicio;
     pintaPrazo({ prazo:'pf-prazo', semana:'pf-semana', conta:'pf-conta', ate:'pf-ate' }, d, 'prof');
-    pintaSemanas(document.getElementById('pf-semanas'), sess.semanas, d.semana_inicio, carregaSemana);
+    document.getElementById('pf-semanas').innerHTML = '';
+    if(d.aberta === false){ renderFechada(d); return; }
     renderItens(d); renderRodape(d);
   }).catch(function(e){ lista.innerHTML = '<p class="pf-erro">' + esc(humano(e)) + '</p>'; });
 }
@@ -3570,11 +3582,26 @@ function renderItens(d){
   Array.prototype.forEach.call(lista.querySelectorAll('button[data-pede]'), function(b){ b.onclick = function(){ abrePedido(Number(b.getAttribute('data-pede'))); }; });
   Array.prototype.forEach.call(lista.querySelectorAll('button[data-cancela]'), function(b){ b.onclick = function(){ cancelaPedido(Number(b.getAttribute('data-cancela'))); }; });
 }
+function renderFechada(d){
+  var lista = document.getElementById('pf-lista'), aviso = document.querySelector('#prof-view .pf-aviso');
+  document.getElementById('pf-resumo').innerHTML = '';
+  var quando = d.proxima_abertura ? fmtDiaHora(d.proxima_abertura) : (d.abre_em ? fmtDiaHora(d.abre_em) : '');
+  var txt;
+  if(d.motivo === 'confirmada') txt = 'Você confirmou a semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' em ' + fmtTs(d.confirmada_em) + '. Obrigado. A próxima conferência abre ' + quando + '.';
+  else if(d.motivo === 'antes_da_abertura') txt = 'A conferência da semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' abre ' + quando + '. Ela fica aberta até você confirmar. Você recebe um aviso no WhatsApp.';
+  else txt = 'A semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' fechou e foi para o faturamento do jeito que estava. A próxima conferência abre ' + quando + '.';
+  if(aviso) aviso.innerHTML = esc(txt);
+  lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'confirmada' ? 'Nada a fazer até a próxima semana.' : (d.motivo === 'antes_da_abertura' ? 'Nada a conferir por enquanto.' : 'Nada a fazer.')) + '</p>';
+  var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
+  btn.style.display = 'none'; ok.style.display = 'none'; nota.textContent = '';
+}
 function renderRodape(d){
+  var aviso = document.querySelector('#prof-view .pf-aviso');
+  if(aviso) aviso.innerHTML = 'Confira cada consulta da semana. Se algo estiver errado, peça a correção — a secretaria ajusta no Feegow. Quando tudo estiver certo, confirme a semana com uma foto. <b>O prazo é segunda-feira às ' + esc(sess.horaPrazo || '22h') + '. Depois de confirmar, a semana fecha para você; o que não for corrigido até lá vai para o faturamento do jeito que está.</b>';
+  document.getElementById('pf-confirmar').style.display = '';
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   var abertos = (d.itens || []).filter(pedidoAberto).length;
-  if(d.confirmada_em){ ok.textContent = 'Semana confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : '') + '.'; ok.style.display = 'block'; btn.textContent = 'Confirmar de novo'; }
-  else { ok.style.display = 'none'; btn.textContent = 'Confirmo que a semana está certa'; }
+  ok.style.display = 'none'; btn.textContent = 'Confirmo que a semana está certa';
   nota.textContent = d.fechada ? 'Esta semana já fechou. A confirmação fica registrada como atrasada.'
     : d.prazo_passou ? 'O prazo passou. A confirmação fica registrada como atrasada.'
     : (abertos ? ('Você tem ' + abertos + ' pedido' + (abertos>1?'s':'') + ' de correção aberto' + (abertos>1?'s':'') + '. Pode confirmar mesmo assim — a secretaria vê os pedidos.') : 'Confira todas as consultas antes de confirmar. Vai pedir uma foto.');
@@ -3727,13 +3754,14 @@ function desenhaSec(d){
 
   var profs = d.profissionais || [];
   var h = '<div class="adm-sec">Quem já confirmou <small>(' + profs.filter(function(p){ return p.confirmado_em; }).length + ' de ' + profs.length + ')</small></div>';
-  h += '<table class="adm"><tr><th>Profissional</th><th>Consultas</th><th>Pendentes</th><th>Pedidos</th><th>Confirmou</th><th>Avisos</th></tr>';
-  if(!profs.length) h += '<tr><td colspan="6">Nenhum profissional cadastrado ainda (prof_definir_acesso).</td></tr>';
+  h += '<table class="adm"><tr><th>Profissional · telefone</th><th>Consultas</th><th>Pendentes</th><th>Pedidos</th><th>Confirmou</th><th>Avisos</th></tr>';
+  if(!profs.length) h += '<tr><td colspan="6">Nenhum profissional com acesso ainda — o administrador cria no ⚙️.</td></tr>';
   profs.forEach(function(p){
     var av = p.avisos || [], env = av.filter(function(a){ return a.situacao === 'enviado'; }).length,
         pen = av.filter(function(a){ return a.situacao === 'pendente'; }).length, err = av.filter(function(a){ return a.situacao === 'erro'; }).length;
     var avTxt = !p.telefone ? '<span class="tag-sit tag-s1">sem telefone</span>' : (av.length ? (env + ' enviado' + (env===1?'':'s') + (pen ? ' · ' + pen + ' a enviar' : '') + (err ? ' · <span class="tag-sit tag-s0">' + err + ' com erro</span>' : '')) : '—');
-    h += '<tr><td><b>' + esc(p.nome) + '</b></td><td>' + p.consultas + '</td>' +
+    h += '<tr><td><b>' + esc(p.nome) + '</b>' + (p.teste_ate ? ' <span class="tag-sit tag-s1">teste até ' + fmtTs(p.teste_ate) + '</span>' : '') +
+      '<br><small>' + (p.telefone ? '📞 ' + esc(p.telefone) : '<span class="tag-sit tag-s1">sem telefone</span>') + ' <button type="button" class="pf-fotobtn" title="editar telefone" data-tel="' + p.profissional_id + '">✏️</button></small></td><td>' + p.consultas + '</td>' +
       '<td>' + (p.pendentes ? '<span class="tag-sit tag-s1">' + p.pendentes + '</span>' : '0') + '</td>' +
       '<td>' + (p.pedidos_abertos ? '<span class="tag-sit tag-s1">' + p.pedidos_abertos + '</span>' : '0') + '</td>' +
       '<td>' + (p.confirmado_em ? ('<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">' + fmtTs(p.confirmado_em) + (p.confirmado_fora_do_prazo ? ' · atrasado' : '') + '</span>' + (p.foto ? ' <button type="button" class="pf-fotobtn" title="ver a foto" data-foto="' + p.profissional_id + '">📷</button>' : '')) : '<span class="tag-sit tag-s0">ainda não</span>') + '</td>' +
@@ -3742,6 +3770,7 @@ function desenhaSec(d){
   h += '</table>';
   var tb = document.createElement('div'); tb.innerHTML = h; host.appendChild(tb);
   Array.prototype.forEach.call(tb.querySelectorAll('button[data-foto]'), function(b){ b.onclick = function(){ abreFoto(Number(b.getAttribute('data-foto')), d.semana_inicio); }; });
+  Array.prototype.forEach.call(tb.querySelectorAll('button[data-tel]'), function(b){ b.onclick = function(){ editaTelefoneBalcao(Number(b.getAttribute('data-tel')), d); }; });
 
   var ped = d.pedidos || [];
   var s = document.createElement('div'); s.className = 'adm-sec';
@@ -3773,6 +3802,20 @@ function desenhaSec(d){
   });
   var badge = document.getElementById('gv-b-prof');
   if(badge){ var n = ped.filter(function(p){ return p.situacao === 'aberto'; }).length; badge.textContent = n; badge.hidden = !n; }
+}
+function editaTelefoneBalcao(profId, d){
+  var p = (d.profissionais || []).find(function(x){ return x.profissional_id === profId; }); if(!p) return;
+  var m = modal('Telefone — ' + esc(p.nome),
+    '<p class="sub" style="margin-bottom:8px">É o número que recebe os avisos da conferência semanal. DDD + número, só dígitos.</p>' +
+    '<div class="fg"><input type="text" class="fc" id="pf-tel-novo" inputmode="numeric" value="' + esc(p.telefone || '') + '" placeholder="62999990000"></div><p class="pf-erro" id="pf-tel-erro" style="display:none"></p>',
+    '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-tel-ok">Salvar</button>');
+  $('[data-volta]', m.el).onclick = m.fecha;
+  $('#pf-tel-ok', m.el).onclick = function(){
+    $('#pf-tel-ok', m.el).disabled = true;
+    rpc('prof_balcao_telefone', { p_senha: secr.senha, p_profissional_id: profId, p_telefone: $('#pf-tel-novo', m.el).value })
+      .then(function(){ m.fecha(); document.getElementById('gv-conteudo').innerHTML = ''; carregaSec(d.semana_inicio); })
+      .catch(function(e){ erroEm($('#pf-tel-erro', m.el), humano(e)); $('#pf-tel-ok', m.el).disabled = false; });
+  };
 }
 function quemAssina(){
   return (typeof CU !== 'undefined' && CU && CU.nome) ? CU.nome : (prompt('Seu nome (fica registrado no pedido):') || '');
@@ -3864,8 +3907,11 @@ function desenhaAdmin(){
       campo('pf-c-url', 'Link da página (vai nos avisos)', 'text', urlSugerida, 'placeholder="https://…/painel.html?conferir=1"') +
       '<div class="linha2"><div>' + campo('pf-c-prazo', 'Prazo dos profissionais (segunda)', 'time', P.prazo_profissional_hora) + '</div>' +
       '<div>' + campo('pf-c-fech', 'Fechamento real (terça)', 'time', P.fechamento_hora) + '</div></div>' +
+      '<label for="pf-c-abdia">Aviso de abertura sai no</label>' +
+      '<select id="pf-c-abdia" class="fc" style="width:100%"><option value="domingo"' + (P.abertura_dia !== 'segunda' ? ' selected' : '') + '>domingo (a semana toda já dá para conferir)</option>' +
+      '<option value="segunda"' + (P.abertura_dia === 'segunda' ? ' selected' : '') + '>segunda-feira</option></select>' +
       '<label>Horários dos avisos (vazio = desligado)</label><div class="linha2">' +
-        '<div>' + campo('pf-h-abertura', 'Abertura (segunda)', 'time', H.abertura) + '</div>' +
+        '<div>' + campo('pf-h-abertura', 'Abertura (no dia escolhido acima)', 'time', H.abertura) + '</div>' +
         '<div>' + campo('pf-h-lembrete', 'Lembrete (segunda)', 'time', H.lembrete) + '</div>' +
         '<div>' + campo('pf-h-ultimo', 'Última chamada (segunda)', 'time', H.ultimo) + '</div>' +
         '<div>' + campo('pf-h-encerrado', 'Encerrado (terça)', 'time', H.encerrado) + '</div>' +
@@ -3891,7 +3937,8 @@ function desenhaAdmin(){
     var msg = $('#pf-c-msg', grid); msgEm(msg, 'salvando…');
     rpc('prof_admin_parametros', { p_senha_admin: adm.senha, p_url_pagina: $('#pf-c-url', grid).value, p_telefone_secretaria: $('#pf-b-tel', grid).value,
         p_prazo_profissional_hora: $('#pf-c-prazo', grid).value || null, p_fechamento_hora: $('#pf-c-fech', grid).value || null,
-        p_avisos_horas: horas, p_foto_obrigatoria: $('#pf-c-foto', grid).checked, p_fotos_retencao_dias: Number($('#pf-c-ret', grid).value) || null })
+        p_avisos_horas: horas, p_foto_obrigatoria: $('#pf-c-foto', grid).checked, p_fotos_retencao_dias: Number($('#pf-c-ret', grid).value) || null,
+        p_abertura_dia: $('#pf-c-abdia', grid).value })
       .then(function(){ msgEm(msg, 'salvo ✔'); }).catch(function(e){ msgEm(msg, humano(e), true); });
   };
   $('#pf-b-salvar', grid).onclick = function(){
@@ -3920,20 +3967,30 @@ function desenhaAdmin(){
   var render = function(){
     var f = (adm.filtro || '').toLowerCase();
     var lista = profs.filter(function(p){ return !f || (p.nome_feegow || '').toLowerCase().indexOf(f) >= 0 || (p.nome_exibicao || '').toLowerCase().indexOf(f) >= 0; });
-    var h = '<table class="adm"><tr><th>Profissional (Feegow)</th><th>Consultas 90d</th><th>Acesso</th><th>Nome na página</th><th>Telefone</th><th>Último acesso</th><th>Ações</th></tr>';
+    var h = '<table class="adm"><tr><th>Profissional (Feegow)</th><th>Consultas 90d</th><th>Acesso</th><th>Nome na página</th><th>Telefone</th><th>Semana da vez</th><th>Ações</th></tr>';
     if(!lista.length) h += '<tr><td colspan="7">Ninguém com esse nome.</td></tr>';
     lista.forEach(function(p){
       h += '<tr><td><b>' + esc(p.nome_feegow) + '</b>' + (p.situacao_feegow !== 'ativo' ? ' <span class="tag-sit tag-s1">' + esc(p.situacao_feegow) + '</span>' : '') + '</td>' +
         '<td>' + p.consultas_90d + ' <small>(' + p.unimed_90d + ' Unimed)</small></td>' +
         '<td>' + (p.tem_acesso ? (p.ativo ? '<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">sim</span>' : '<span class="tag-sit tag-s1">inativo</span>') + (p.bloqueado ? ' <span class="tag-sit tag-s0">bloqueado 15 min</span>' : '') : '<span class="tag-sit">não</span>') + '</td>' +
-        '<td>' + esc(p.nome_exibicao || '—') + '</td><td>' + esc(p.telefone || '—') + '</td><td>' + (p.ultimo_acesso_em ? fmtTs(p.ultimo_acesso_em) : '—') + '</td>' +
+        '<td>' + esc(p.nome_exibicao || '—') + '</td><td>' + esc(p.telefone || '—') + '</td>' +
+        '<td style="font-size:12.5px">' + (p.tem_acesso ? ((p.confirmou_em ? '<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">confirmou ' + fmtTs(p.confirmou_em) + '</span>' : '<span class="tag-sit">não confirmou</span>') + (p.teste_ate ? '<br><span class="tag-sit tag-s1">teste até ' + fmtTs(p.teste_ate) + '</span>' : '') + (p.ultimo_acesso_em ? '<br><small>último acesso ' + fmtTs(p.ultimo_acesso_em) + '</small>' : '')) : '—') + '</td>' +
         '<td style="white-space:nowrap">' + (p.tem_acesso
-          ? '<button type="button" class="gv-btn mini" data-edita="' + p.profissional_id + '">Editar</button> <button type="button" class="gv-btn mini" data-remove="' + p.profissional_id + '">Remover</button>'
+          ? '<button type="button" class="gv-btn mini" data-edita="' + p.profissional_id + '">Editar</button> <button type="button" class="gv-btn mini" data-remove="' + p.profissional_id + '">Remover</button>' +
+            (p.teste_ate ? ' <button type="button" class="gv-btn mini" data-teste="' + p.profissional_id + '" data-min="0">Fechar teste</button>' : ' <button type="button" class="gv-btn mini" data-teste="' + p.profissional_id + '" data-min="120" title="Abre a conferência agora para este profissional, por 2 horas, ignorando o domingo">Abrir p/ teste 2h</button>') +
+            (p.confirmou_em ? ' <button type="button" class="gv-btn mini" data-desfaz="' + p.profissional_id + '" title="Apaga a confirmação (e a foto) desta semana para ele poder confirmar de novo">Desfazer confirmação</button>' : '')
           : '<button type="button" class="gv-btn verde mini" data-edita="' + p.profissional_id + '">Criar acesso</button>') + '</td></tr>';
     });
     tb.innerHTML = h + '</table>';
     Array.prototype.forEach.call(tb.querySelectorAll('button[data-edita]'), function(b){ b.onclick = function(){ editaAcesso(Number(b.getAttribute('data-edita'))); }; });
     Array.prototype.forEach.call(tb.querySelectorAll('button[data-remove]'), function(b){ b.onclick = function(){ removeAcesso(Number(b.getAttribute('data-remove'))); }; });
+    Array.prototype.forEach.call(tb.querySelectorAll('button[data-teste]'), function(b){ b.onclick = function(){
+      rpc('prof_admin_abrir_teste', { p_senha_admin: adm.senha, p_profissional_id: Number(b.getAttribute('data-teste')), p_minutos: Number(b.getAttribute('data-min')) })
+        .then(carregaAdmin).catch(function(e){ alert(humano(e)); }); }; });
+    Array.prototype.forEach.call(tb.querySelectorAll('button[data-desfaz]'), function(b){ b.onclick = function(){
+      if(!confirm('Desfazer a confirmação desta semana? A foto também é apagada.')) return;
+      rpc('prof_admin_desfazer_confirmacao', { p_senha_admin: adm.senha, p_profissional_id: Number(b.getAttribute('data-desfaz')), p_semana_inicio: null })
+        .then(carregaAdmin).catch(function(e){ alert(humano(e)); }); }; });
   };
   render();
   $('#pf-adm-busca', sec).addEventListener('input', function(e){ adm.filtro = e.target.value; render(); });
