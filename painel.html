@@ -3293,7 +3293,30 @@ return { boot: boot, startTimers: startTimers, stopTimers: stopTimers, recarrega
 #prof-view .pf-btn,.pf-btn{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid #bbb;background:#fff;cursor:pointer;font:600 15px var(--fn);color:#111}
 #prof-view .pf-pri,.pf-pri{background:#0F6B5C;border-color:#0F6B5C;color:#fff}
 .pf-pri:disabled{opacity:.55;cursor:default}
-#prof-view .pf-baixar{display:inline-block;margin-top:12px}
+#prof-view .pf-baixar{display:inline-block;margin-top:12px;margin-right:8px}
+#prof-view .pf-presenca{margin:14px 0 0;padding:12px 14px;border:1px solid #e5e5e5;border-radius:10px;font-size:15px;color:#333}
+#prof-view .pf-presenca b{font-size:20px;color:#111;margin-right:6px}
+#prof-view .pf-presenca small{color:#666}
+.rc-card{border:1px solid #d9dee6;border-radius:10px;overflow:hidden;margin:16px 0;background:#fff;font-size:14px}
+.rc-head{background:#1f3a5f;color:#fff;padding:14px 18px}
+.rc-head b{display:block;font-size:17px}
+.rc-head span{font-size:12.5px;opacity:.9}
+.rc-info{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid #e5e5e5}
+.rc-info div{padding:7px 12px;border-bottom:1px solid #eef1f5}
+.rc-info div:nth-child(odd){background:#f3f6fa;font-weight:600;color:#333}
+.rc-sec{font:700 13px var(--fn);color:#1f3a5f;padding:12px 12px 4px}
+.rc-t{width:100%;border-collapse:collapse;margin:0 0 8px}
+.rc-t th{background:#1f3a5f;color:#fff;font-weight:700;text-align:left;padding:7px 10px;font-size:12.5px}
+.rc-t td{padding:6px 10px;border-bottom:1px solid #edf0f4;font-size:13px}
+.rc-t tr:nth-child(even) td{background:#f7f9fc}
+.rc-t td.num{text-align:right;white-space:nowrap}
+.rc-t tr.tot td{font-weight:800;background:#e9eef5}
+.rc-t td.ok{color:#1f7a3a;font-weight:700}
+.rc-t td.falta{color:#b03a2e;font-weight:700}
+.rc-foot{padding:10px 12px 14px;color:#666;font-size:11.5px;font-style:italic}
+#s-guias .pf-adm-card .rg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 10px}
+#s-guias .pf-adm-card .rg-grid label{margin:6px 0 2px}
+
 #prof-view .pf-rodape{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#fff;border-top:1px solid #e5e5e5;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 #prof-view .pf-rodape-in{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
 #prof-view .pf-rodape .pf-btn{width:100%;font-size:18px;min-height:52px}
@@ -3377,7 +3400,7 @@ var MSG = {
   SENHA_CURTA:'Senha muito curta.', TELEFONE_INVALIDO:'Telefone inválido — DDD + número, só dígitos.',
   PROFISSIONAL_NAO_EXISTE:'Este profissional não existe no Feegow.', ADMIN_JA_EXISTE:'A senha de administração já foi definida.',
   HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.', PERIODO_INVERTIDO:'A data inicial é depois da final.', PERIODO_INCOMPLETO:'Preencha as duas datas.',
-  AINDA_NAO_ABRIU:'A conferência deste período ainda não foi liberada.', JA_CONFIRMADA:'Este período já foi confirmado. A próxima conferência será liberada na data indicada.',
+  AINDA_NAO_ABRIU:'A conferência deste período ainda não foi liberada.', SEM_RECIBO:'Ainda não há recibo gerado para este mês.', SEM_REGIME:'Este profissional ainda não tem regime definido.', REGIME_INVALIDO:'Regime inválido.', JA_CONFIRMADA:'Este período já foi confirmado. A próxima conferência será liberada na data indicada.',
   SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.'
 };
 var sess = { id:null, senha:null, nome:null, semanas:[], semana:null, fotoObrigatoria:true };
@@ -3400,6 +3423,8 @@ function fmtDiaHora(iso){
   return dia + ', às ' + h;
 }
 function agora(){ return Date.now() + relogioOffset; }
+function brl(v){ return 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function dmy(d){ if(!d) return ''; var p = String(d).slice(0,10).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 function pedidoAberto(it){ return it.pedido_id && it.pedido_situacao === 'aberto'; }
 
 function rpc(fn, args){
@@ -3534,6 +3559,13 @@ function classeStatus(it){
   if(t.indexOf('não compareceu') === 0 || t.indexOf('nao compareceu') === 0) return 'falta';
   return 'neutro';
 }
+function presencaHtml(d){
+  var p = d.presenca; if(!p || (!p.atendidos && !p.faltas)) return '';
+  var mes = p.mes ? MESES[dLocal(p.mes).getMonth()] : '';
+  return '<div class="pf-presenca"><b>' + esc(p.pct_texto || '—') + '</b> de presença em ' + esc(mes.toLowerCase()) + ' até agora' +
+         '<br><small>' + p.atendidos + ' atendido' + (p.atendidos === 1 ? '' : 's') + ' · ' + p.faltas + ' falta' + (p.faltas === 1 ? '' : 's') + (p.so_unimed ? ' · somente Unimed' : '') + '</small></div>';
+}
+var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function renderItens(d){
   var itens = d.itens || [];
   var lista = document.getElementById('pf-lista');
@@ -3572,11 +3604,36 @@ function renderFechada(d){
   else if(d.motivo === 'antes_da_abertura') txt = 'A conferência da agenda de ' + ddmm(pI) + ' a ' + ddmm(pF) + ' será liberada ' + quando + '. Ela permanece aberta até a sua confirmação. Você será avisado pelo WhatsApp.';
   else txt = 'O prazo de conferência da agenda de ' + ddmm(pI) + ' a ' + ddmm(pF) + ' encerrou, e ela seguiu para o faturamento com as informações registradas. A próxima conferência será liberada ' + quando + '.';
   if(aviso) aviso.innerHTML = esc(txt);
+  var h = '';
   if(d.motivo === 'confirmada'){
-    lista.innerHTML = '<p class="pf-vazio">Não há pendências neste período.</p><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar comprovante da conferência (PDF)</button>';
-    document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
+    h += '<p class="pf-vazio">Não há pendências neste período.</p>' +
+         '<div><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar comprovante da conferência (PDF)</button></div>';
   } else {
-    lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'antes_da_abertura' ? 'Nenhuma conferência liberada no momento.' : 'Nenhuma pendência.') + '</p>';
+    h += '<p class="pf-vazio">' + (d.motivo === 'antes_da_abertura' ? 'Nenhuma conferência liberada no momento.' : 'Nenhuma pendência.') + '</p>';
+  }
+  var lst = d.recibos || [];
+  if(d.recibo || lst.length){
+    h += '<div class="pf-dia"><h2>Recibos de repasse</h2></div><div id="pf-recibos"></div><div id="pf-recibo-area"></div>';
+  }
+  lista.innerHTML = h;
+  if(d.motivo === 'confirmada') document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
+  if(d.recibo || lst.length){
+    var box = document.getElementById('pf-recibos'), area = document.getElementById('pf-recibo-area');
+    var rh = '';
+    lst.forEach(function(r){
+      rh += '<div class="pf-item"><div class="pf-hora"></div><p class="pf-nome">' + esc(r.mes_nome || dmy(r.competencia)) + '</p><p class="pf-sub">' + brl(r.total) + (r.versao > 1 ? ' · versão ' + r.versao : '') + '</p>' +
+            '<div class="pf-status neutro"><button type="button" class="pf-btn" data-ver="' + r.competencia + '">Ver</button> <button type="button" class="pf-btn" data-pdf="' + r.competencia + '">PDF</button></div></div>';
+    });
+    box.innerHTML = rh;
+    var abre = function(comp, baixar){
+      var pronto = (d.recibo && d.recibo.competencia === comp) ? Promise.resolve(d.recibo)
+                 : rpc('prof_recibo', { p_profissional_id: sess.id, p_senha: sess.senha, p_competencia: comp });
+      pronto.then(function(r){ if(baixar) baixarRecibo(r); else { area.innerHTML = reciboHtml(r); area.scrollIntoView({ behavior: 'smooth' }); } })
+            .catch(function(e){ alert(humano(e)); });
+    };
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-ver]'), function(b){ b.onclick = function(){ abre(b.getAttribute('data-ver'), false); }; });
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-pdf]'), function(b){ b.onclick = function(){ abre(b.getAttribute('data-pdf'), true); }; });
+    if(d.recibo && d.motivo === 'confirmada' && d.recibo.competencia === (d.presenca && d.presenca.mes)) area.innerHTML = reciboHtml(d.recibo);
   }
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   btn.style.display = 'none'; ok.style.display = 'none'; nota.textContent = '';
@@ -3584,14 +3641,16 @@ function renderFechada(d){
 function renderRodape(d){
   var aviso = document.querySelector('#prof-view .pf-aviso');
   if(aviso) aviso.innerHTML =
-    '<p>Esta é a sua agenda do período, conforme registrada no sistema da clínica. É a partir dela que os atendimentos são faturados e que o seu repasse é calculado — por isso pedimos a sua conferência.</p>' +
+    (d.tipo_periodo === 'fechamento_mes'
+      ? '<p>Estes são os últimos dias do mês. Ao confirmá-los, a conferência do mês fica concluída e o seu recibo de repasse é gerado na hora.</p>'
+      : '<p>Esta é a sua agenda do período, conforme registrada no sistema da clínica. É a partir dela que os atendimentos são faturados e que o seu repasse é calculado — por isso pedimos a sua conferência.</p>') +
     '<p>Se alguma consulta estiver com a situação incorreta, informe a recepção pelo WhatsApp. A correção é feita no Feegow e reflete aqui em até 30 minutos.</p>' +
     '<p>Quando todas as informações estiverem corretas, confirme a agenda. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>; após esse horário, o período segue para o faturamento com as informações registradas.</p>' +
     (ehCelular() ? '' : '<p>A confirmação é feita pelo celular, com registro fotográfico.</p>');
   document.getElementById('pf-confirmar').style.display = '';
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   var abertos = (d.itens || []).filter(pedidoAberto).length;
-  ok.style.display = 'none'; btn.textContent = 'Confirmar agenda';
+  ok.style.display = 'none'; btn.textContent = d.tipo_periodo === 'fechamento_mes' ? 'Confirmar e concluir o mês' : 'Confirmar agenda';
   nota.textContent = d.fechada ? 'O período encerrou. A confirmação será registrada como posterior ao prazo.'
     : d.prazo_passou ? 'O prazo encerrou. A confirmação será registrada como posterior ao prazo.'
     : (ehCelular() ? 'A confirmação inclui um registro fotográfico.' : 'A confirmação é feita pelo celular.');
@@ -3637,6 +3696,76 @@ function abreConfirmacao(d){
   };
 }
 /* ═══ relatório em PDF do que foi confirmado (jsPDF carregado só na hora) ═══ */
+function reciboHtml(r){
+  var h = '<div class="rc-card"><div class="rc-head"><b>Centro Médico Judithe Ferreira</b><span>Anápolis / GO • Recibo de Repasse — ' + esc(r.mes_nome) + '</span></div>' +
+    '<div class="rc-info"><div>Profissional</div><div>' + esc(r.profissional) + '</div>' +
+    '<div>Período</div><div>' + dmy(r.periodo_inicio) + ' a ' + dmy(r.periodo_fim) + '</div>' +
+    '<div>Data de emissão</div><div>' + (r.emitido_em ? fmtTs(r.emitido_em).slice(0,10) : '—') + (r.versao > 1 ? ' (versão ' + r.versao + ')' : '') + '</div>' +
+    '<div>Consultas finalizadas</div><div>' + r.finalizadas + '</div>' +
+    (r.mostra_pct ? '<div>Porcentagem de agenda</div><div>' + esc(r.pct_texto) + '</div>' : '') + '</div>' +
+    '<div class="rc-sec">Resumo</div><table class="rc-t"><tr><th>Descrição</th><th>Quantidade</th><th>Valor Total</th></tr>';
+  (r.resumo || []).forEach(function(x){ h += '<tr><td>' + esc(x.descricao) + '</td><td class="num">' + x.quantidade + '</td><td class="num">' + brl(x.valor) + '</td></tr>'; });
+  h += '<tr class="tot"><td>TOTAL A RECEBER</td><td></td><td class="num">' + brl(r.total) + '</td></tr></table>';
+  h += '<div class="rc-sec">Detalhamento por paciente</div><table class="rc-t"><tr><th>Paciente</th><th>Data</th><th>Horário</th>' + (r.coluna_descricao ? '<th>Descrição</th>' : '') + '<th>Status</th></tr>';
+  (r.detalhe || []).forEach(function(x){ h += '<tr><td>' + esc(x.paciente) + '</td><td>' + dmy(x.data) + '</td><td>' + esc(x.horario) + '</td>' + (r.coluna_descricao ? '<td>' + esc(x.descricao || '') + '</td>' : '') + '<td class="' + (x.status === 'Atendido' ? 'ok' : 'falta') + '">' + esc(x.status) + '</td></tr>'; });
+  h += '</table><div class="rc-foot">Documento interno de repasse. Atendido = sessão realizada (inclui lançamentos em aguardando). Falta = cancelamento, não comparecimento ou agendamento não realizado.</div></div>';
+  return h;
+}
+function carregaScript(src, pronto){
+  return new Promise(function(resolve, reject){
+    if(pronto()) return resolve();
+    var sc = document.createElement('script'); sc.src = src;
+    sc.onload = function(){ pronto() ? resolve() : reject(new Error('não carregou ' + src)); };
+    sc.onerror = function(){ reject(new Error('sem internet para baixar o gerador de PDF')); };
+    document.head.appendChild(sc);
+  });
+}
+function baixarRecibo(r){
+  carregaJsPdf().then(function(jsPDF){
+    return carregaScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', function(){ return !!(jsPDF.API && jsPDF.API.autoTable); }).then(function(){ return jsPDF; });
+  }).then(function(jsPDF){
+    var doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    var L = 20, W = 170, navy = [31, 58, 95], y = 18;
+    doc.setFillColor(navy[0], navy[1], navy[2]); doc.rect(L, y - 8, W, 16, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Centro Médico Judithe Ferreira', L + 4, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text('Anápolis / GO • Recibo de Repasse — ' + r.mes_nome, L + 4, y + 5.5);
+    doc.setTextColor(0); y += 14;
+    var info = [['Profissional', r.profissional], ['Período', dmy(r.periodo_inicio) + ' a ' + dmy(r.periodo_fim)],
+                ['Data de emissão', (r.emitido_em ? fmtTs(r.emitido_em).slice(0,10) : '—') + (r.versao > 1 ? ' (versão ' + r.versao + ')' : '')],
+                ['Consultas finalizadas', String(r.finalizadas)]];
+    if(r.mostra_pct) info.push(['Porcentagem de agenda', r.pct_texto]);
+    doc.autoTable({ startY: y, margin: { left: L, right: 20 }, body: info, theme: 'grid',
+      styles: { fontSize: 9.5, cellPadding: 2, lineColor: [204, 204, 204], lineWidth: 0.2, textColor: 20 },
+      columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold', fillColor: [243, 246, 250] } }, alternateRowStyles: { fillColor: [255, 255, 255] } });
+    y = doc.lastAutoTable.finalY + 8;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(navy[0], navy[1], navy[2]); doc.text('Resumo', L, y); y += 3;
+    var body = (r.resumo || []).map(function(x){ return [x.descricao, String(x.quantidade), brl(x.valor)]; });
+    body.push([{ content: 'TOTAL A RECEBER', styles: { fontStyle: 'bold', fillColor: [233, 238, 245] } }, { content: '', styles: { fillColor: [233, 238, 245] } }, { content: brl(r.total), styles: { fontStyle: 'bold', fillColor: [233, 238, 245], halign: 'right' } }]);
+    doc.autoTable({ startY: y, margin: { left: L, right: 20 }, head: [['Descrição', 'Quantidade', 'Valor Total']], body: body, theme: 'grid',
+      headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 9.5 },
+      styles: { fontSize: 9.5, cellPadding: 2, lineColor: [204, 204, 204], lineWidth: 0.2, textColor: 20 },
+      columnStyles: { 0: { cellWidth: 95 }, 1: { cellWidth: 30, halign: 'right' }, 2: { cellWidth: 45, halign: 'right' } } });
+    y = doc.lastAutoTable.finalY + 8;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(navy[0], navy[1], navy[2]); doc.text('Detalhamento por paciente', L, y); y += 3;
+    var head = r.coluna_descricao ? [['Paciente', 'Data', 'Horário', 'Descrição', 'Status']] : [['Paciente', 'Data', 'Horário', 'Status']];
+    var det = (r.detalhe || []).map(function(x){
+      var st = { content: x.status, styles: { fontStyle: 'bold', textColor: x.status === 'Atendido' ? [31, 122, 58] : [176, 58, 46] } };
+      return r.coluna_descricao ? [x.paciente, dmy(x.data), x.horario, x.descricao || '', st] : [x.paciente, dmy(x.data), x.horario, st];
+    });
+    var cols = r.coluna_descricao ? { 0: { cellWidth: 70 }, 1: { cellWidth: 24 }, 2: { cellWidth: 20 }, 3: { cellWidth: 30 }, 4: { cellWidth: 26 } }
+                                  : { 0: { cellWidth: 95 }, 1: { cellWidth: 28 }, 2: { cellWidth: 22 }, 3: { cellWidth: 25 } };
+    doc.autoTable({ startY: y, margin: { left: L, right: 20, bottom: 22 }, head: head, body: det, theme: 'grid',
+      headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+      styles: { fontSize: 8.5, cellPadding: 1.6, lineColor: [204, 204, 204], lineWidth: 0.2, textColor: 20 },
+      alternateRowStyles: { fillColor: [247, 249, 252] }, columnStyles: cols });
+    var pages = doc.internal.getNumberOfPages();
+    for(var i = 1; i <= pages; i++){
+      doc.setPage(i); doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110);
+      doc.text(doc.splitTextToSize('Documento interno de repasse. Atendido = sessão realizada (inclui lançamentos em aguardando). Falta = cancelamento, não comparecimento ou agendamento não realizado.', W), L, 285);
+    }
+    doc.save('Recibo ' + r.mes_nome.replace(' / ', ' ') + ' - ' + r.profissional + '.pdf');
+  }).catch(function(e){ alert('Não deu para gerar o PDF: ' + e.message); });
+}
 function carregaJsPdf(){
   return new Promise(function(resolve, reject){
     if(window.jspdf && window.jspdf.jsPDF) return resolve(window.jspdf.jsPDF);
@@ -3930,10 +4059,12 @@ function desenhaAdmin(){
     '<p>Cada profissional entra na página de confirmação com a própria senha. Telefone é o que recebe os avisos de WhatsApp (só dígitos, com DDD). ' +
     'Remover um acesso não apaga o histórico de semanas e pedidos.</p>' +
     '<div class="pf-form"><button type="button" class="gv-btn" id="pf-adm-voltar">← Voltar para a semana</button>' +
-    '<button type="button" class="gv-btn" id="pf-adm-recarregar">↻ Atualizar</button></div>';
+    '<button type="button" class="gv-btn" id="pf-adm-recarregar">↻ Atualizar</button>' +
+    '<button type="button" class="gv-btn verde" id="pf-adm-repasse">💰 Repasse — regimes e recibos</button></div>';
   host.appendChild(topo);
   $('#pf-adm-voltar', topo).onclick = function(){ host.innerHTML = ''; carregaSec(secr.semana); };
   $('#pf-adm-recarregar', topo).onclick = carregaAdmin;
+  $('#pf-adm-repasse', topo).onclick = function(){ carregaRepasse(null); };
 
   var urlSugerida = P.url_pagina || (location.href.split('?')[0].split('#')[0] + '?conferir=1');
   var grid = document.createElement('div'); grid.className = 'pf-adm-grid';
@@ -4077,6 +4208,98 @@ function removeAcesso(profId){
   if(!confirm('Remover o acesso de ' + p.nome_feegow + '?\n\nO histórico de semanas e pedidos continua guardado. Para só impedir a entrada, use Editar → desmarcar "acesso ativo".')) return;
   rpc('prof_admin_remover_acesso', { p_senha_admin: adm.senha, p_profissional_id: profId })
     .then(function(){ carregaAdmin(); }).catch(function(e){ alert(humano(e)); });
+}
+
+/* ═══ 💰 REPASSE — regimes, regime por profissional, recibos do mês (administrador) ═══ */
+var CAMPOS_REGIME = {
+  psicologo: [['plano_alto','Plano — acima do corte (R$)'],['plano_baixo','Plano — abaixo do corte (R$)'],['corte_pct','Corte (%)'],['usa_corte','Usa o corte? (true/false)'],['lev_soul','Lev Soul (R$)'],['aba','ABA (R$)'],['particular_pct','Particular (%)']],
+  faixa:     [['ate_n','Sessões na 1ª faixa'],['valor_ate','Valor 1ª faixa (R$)'],['valor_apos','Valor depois (R$)'],['aba','ABA (R$)'],['particular_pct','Particular (%)']],
+  nutri:     [['local','Unimed Local (R$)'],['intercambio','Unimed Intercâmbio (R$)']],
+  sem_recibo: []
+};
+function carregaRepasse(comp){
+  var host = document.getElementById('gv-conteudo'); if(!host) return;
+  host.innerHTML = '<p class="gv-vazio">Carregando…</p>';
+  rpc('rep_admin_listar', { p_senha_admin: adm.senha, p_competencia: comp }).then(function(d){ desenhaRepasse(d); })
+    .catch(function(e){ host.innerHTML = '<p class="gv-vazio">⚠️ ' + esc(humano(e)) + '</p>'; });
+}
+function desenhaRepasse(d){
+  var host = document.getElementById('gv-conteudo'); if(!host) return;
+  host.innerHTML = '';
+  var topo = document.createElement('div'); topo.className = 'oc-topo';
+  topo.innerHTML = '<h2>💰 Repasse — ' + esc(d.mes_nome) + '</h2>' +
+    '<p>Os recibos são gerados automaticamente quando o profissional confirma os últimos dias do mês. Aqui você define os regimes e os valores, escolhe o regime de cada profissional e pode gerar ou atualizar os recibos de um mês.</p>' +
+    '<div class="pf-form"><button type="button" class="gv-btn" id="rp-voltar">← Administração</button>' +
+    '<label for="rp-mes" style="margin-left:8px">Mês</label><input type="month" id="rp-mes" class="pf-adm-busca" style="width:auto" value="' + String(d.competencia).slice(0,7) + '">' +
+    '<button type="button" class="gv-btn verde" id="rp-gerar">Gerar / atualizar recibos do mês</button><span class="pf-adm-msg" id="rp-msg"></span></div>';
+  host.appendChild(topo);
+  $('#rp-voltar', topo).onclick = carregaAdmin;
+  $('#rp-mes', topo).onchange = function(e){ carregaRepasse(e.target.value + '-01'); };
+  $('#rp-gerar', topo).onclick = function(){
+    if(!confirm('Gerar ou atualizar os recibos de ' + d.mes_nome + ' para todos os profissionais com regime? Recibos já gerados ganham uma nova versão.')) return;
+    var msg = $('#rp-msg', topo); msgEm(msg, 'gerando…');
+    rpc('rep_admin_gerar', { p_senha_admin: adm.senha, p_competencia: d.competencia, p_profissional_id: null })
+      .then(function(r){ msgEm(msg, r.gerados + ' gerado(s)' + (r.erros ? ', ' + r.erros + ' sem regime/recibo' : '') + ' ✔'); carregaRepasse(d.competencia); })
+      .catch(function(e){ msgEm(msg, humano(e), true); });
+  };
+
+  // recibos do mês
+  var sec = document.createElement('div'); sec.className = 'adm-sec';
+  sec.innerHTML = 'Recibos de ' + esc(d.mes_nome) + ' <small>(total ' + brl(d.total_mes) + ')</small>';
+  host.appendChild(sec);
+  var tb = document.createElement('div'); host.appendChild(tb);
+  var profs = d.profissionais || [], regs = d.regimes || [];
+  var opts = function(sel){ return '<option value=""' + (!sel ? ' selected' : '') + '>— sem regime —</option>' + regs.map(function(g){ return '<option value="' + g.codigo + '"' + (g.codigo === sel ? ' selected' : '') + '>' + esc(g.nome) + '</option>'; }).join(''); };
+  var h = '<table class="adm"><tr><th>Profissional</th><th>Regime</th><th>Descrição no detalhe</th><th>Recibo do mês</th><th>Ações</th></tr>';
+  profs.forEach(function(p){
+    var r = p.recibo;
+    h += '<tr><td><b>' + esc(p.nome) + '</b>' + (p.situacao !== 'ativo' ? ' <span class="tag-sit tag-s1">' + esc(p.situacao) + '</span>' : '') + (!p.tem_acesso ? ' <small>(sem acesso)</small>' : '') + '</td>' +
+      '<td><select data-regime="' + p.profissional_id + '" class="pf-adm-busca" style="width:auto;max-width:280px">' + opts(p.regime) + '</select></td>' +
+      '<td><input type="checkbox" data-coldesc="' + p.profissional_id + '"' + (p.coluna_descricao ? ' checked' : '') + '></td>' +
+      '<td>' + (r ? '<b>' + brl(r.total) + '</b> · ' + esc(r.pct_texto || '') + ' · ' + (r.finalizadas || 0) + ' consultas<br><small>v' + r.versao + ' · ' + fmtTs(r.gerado_em) + ' · ' + esc(r.gerado_por) + '</small>' : (p.gera_recibo === false ? '<span class="tag-sit">sem recibo</span>' : (p.regime ? '<span class="tag-sit tag-s1">não gerado</span>' : '<span class="tag-sit tag-s0">defina o regime</span>'))) + '</td>' +
+      '<td style="white-space:nowrap">' + (p.regime && p.gera_recibo !== false ? '<button type="button" class="gv-btn mini" data-gerar="' + p.profissional_id + '">' + (r ? 'Regerar' : 'Gerar') + '</button>' : '') +
+      (r ? ' <button type="button" class="gv-btn mini" data-ver="' + p.profissional_id + '">Ver</button> <button type="button" class="gv-btn mini" data-pdf="' + p.profissional_id + '">PDF</button>' : '') + '</td></tr>';
+  });
+  tb.innerHTML = h + '</table><div id="rp-recibo-area"></div>';
+  var salvaRegime = function(id){
+    var sel = tb.querySelector('select[data-regime="' + id + '"]'), chk = tb.querySelector('input[data-coldesc="' + id + '"]');
+    rpc('rep_admin_definir_regime', { p_senha_admin: adm.senha, p_profissional_id: id, p_regime: sel.value || null, p_coluna_descricao: chk.checked })
+      .then(function(r){ if(r && r.ok === false) alert(humano(new Error(r.erro))); else carregaRepasse(d.competencia); }).catch(function(e){ alert(humano(e)); });
+  };
+  Array.prototype.forEach.call(tb.querySelectorAll('select[data-regime]'), function(el){ el.onchange = function(){ salvaRegime(Number(el.getAttribute('data-regime'))); }; });
+  Array.prototype.forEach.call(tb.querySelectorAll('input[data-coldesc]'), function(el){ el.onchange = function(){ salvaRegime(Number(el.getAttribute('data-coldesc'))); }; });
+  Array.prototype.forEach.call(tb.querySelectorAll('button[data-gerar]'), function(b){ b.onclick = function(){
+    rpc('rep_admin_gerar', { p_senha_admin: adm.senha, p_competencia: d.competencia, p_profissional_id: Number(b.getAttribute('data-gerar')) })
+      .then(function(r){ if(r.erros) alert('Não gerado: ' + (r.detalhe[0] && humano(new Error(r.detalhe[0].erro)))); carregaRepasse(d.competencia); }).catch(function(e){ alert(humano(e)); }); }; });
+  var abre = function(id, baixar){
+    rpc('rep_admin_recibo', { p_senha_admin: adm.senha, p_profissional_id: id, p_competencia: d.competencia })
+      .then(function(r){ if(r && r.ok === false) return alert(humano(new Error(r.erro))); if(baixar) baixarRecibo(r); else { var a = document.getElementById('rp-recibo-area'); a.innerHTML = reciboHtml(r); a.scrollIntoView({ behavior: 'smooth' }); } })
+      .catch(function(e){ alert(humano(e)); });
+  };
+  Array.prototype.forEach.call(tb.querySelectorAll('button[data-ver]'), function(b){ b.onclick = function(){ abre(Number(b.getAttribute('data-ver')), false); }; });
+  Array.prototype.forEach.call(tb.querySelectorAll('button[data-pdf]'), function(b){ b.onclick = function(){ abre(Number(b.getAttribute('data-pdf')), true); }; });
+
+  // regimes e valores
+  var sec2 = document.createElement('div'); sec2.className = 'adm-sec'; sec2.innerHTML = 'Regimes e valores <small>(mudar aqui vale para os recibos gerados daqui em diante)</small>';
+  host.appendChild(sec2);
+  var grid = document.createElement('div'); grid.className = 'pf-adm-grid';
+  grid.innerHTML = regs.map(function(g){
+    var campos = CAMPOS_REGIME[g.tipo] || [];
+    return '<div class="pf-adm-card" data-rg="' + g.codigo + '"><h3>' + esc(g.nome) + '</h3><label>Nome</label><input type="text" data-nome value="' + esc(g.nome) + '">' +
+      (campos.length ? '<div class="rg-grid">' + campos.map(function(c){ return '<div><label>' + c[1] + '</label><input type="text" data-param="' + c[0] + '" value="' + esc(g.parametros[c[0]] == null ? '' : String(g.parametros[c[0]])) + '"></div>'; }).join('') + '</div>' : '<p class="sub">Regime sem recibo — nada a configurar.</p>') +
+      '<div class="rodape"><button type="button" class="gv-btn verde" data-salvar>Salvar</button><span class="pf-adm-msg"></span></div></div>';
+  }).join('');
+  host.appendChild(grid);
+  Array.prototype.forEach.call(grid.querySelectorAll('button[data-salvar]'), function(b){ b.onclick = function(){
+    var card = b.closest('.pf-adm-card'), params = {}, msg = card.querySelector('.pf-adm-msg');
+    Array.prototype.forEach.call(card.querySelectorAll('input[data-param]'), function(i){
+      var v = i.value.trim().replace(',', '.'); var k = i.getAttribute('data-param');
+      if(v === 'true' || v === 'false') params[k] = (v === 'true'); else if(v !== '' && !isNaN(Number(v))) params[k] = Number(v); else if(v !== '') params[k] = v;
+    });
+    msgEm(msg, 'salvando…');
+    rpc('rep_admin_salvar_regime', { p_senha_admin: adm.senha, p_codigo: card.getAttribute('data-rg'), p_nome: card.querySelector('input[data-nome]').value, p_parametros: params })
+      .then(function(){ msgEm(msg, 'salvo ✔'); }).catch(function(e){ msgEm(msg, humano(e), true); });
+  }; });
 }
 
 return { loginLista: loginLista, entrarPeloLogin: entrarPeloLogin, sair: sair, secretaria: secretaria, admin: admin };
