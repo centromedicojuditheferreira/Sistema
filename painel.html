@@ -3376,7 +3376,7 @@ var MSG = {
   FOTO_INVALIDA:'Não foi possível ler a foto. Tente de novo.', SEM_FOTO:'Esta confirmação não tem foto.',
   SENHA_CURTA:'Senha muito curta.', TELEFONE_INVALIDO:'Telefone inválido — DDD + número, só dígitos.',
   PROFISSIONAL_NAO_EXISTE:'Este profissional não existe no Feegow.', ADMIN_JA_EXISTE:'A senha de administração já foi definida.',
-  HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.',
+  HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.', PERIODO_INVERTIDO:'A data inicial é depois da final.', PERIODO_INCOMPLETO:'Preencha as duas datas.',
   AINDA_NAO_ABRIU:'A conferência desta semana ainda não abriu.', JA_CONFIRMADA:'Esta semana já foi confirmada — aguarde a próxima.',
   SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.'
 };
@@ -3469,7 +3469,9 @@ function pintaPrazo(ids, dados, modo){
   var box = document.getElementById(ids.prazo);
   var prazo = new Date(dados.prazo), fech = new Date(dados.fechamento);
   var ini = dLocal(dados.semana_inicio), fim = dLocal(dados.semana_fim);
-  document.getElementById(ids.semana).textContent = 'Semana de ' + ddmm(dados.semana_inicio) + ' (' + DIAS[ini.getDay()].toLowerCase() + ') a ' + ddmm(dados.semana_fim) + ' (' + DIAS[fim.getDay()].toLowerCase() + ')';
+  var pIni = dados.periodo_inicio || dados.semana_inicio, pFim = dados.periodo_fim || dados.semana_fim;
+  var dIni = dLocal(pIni), dFim = dLocal(pFim);
+  document.getElementById(ids.semana).textContent = (dados.periodo_especial ? 'Período de ' : 'Semana de ') + ddmm(pIni) + ' (' + DIAS[dIni.getDay()].toLowerCase() + ') a ' + ddmm(pFim) + ' (' + DIAS[dFim.getDay()].toLowerCase() + ')';
   var alvo = modo === 'sec' ? fech : prazo;
   var render = function(){
     var ms = alvo.getTime() - agora();
@@ -3565,9 +3567,10 @@ function renderFechada(d){
   document.getElementById('pf-resumo').innerHTML = '';
   var quando = d.proxima_abertura ? fmtDiaHora(d.proxima_abertura) : (d.abre_em ? fmtDiaHora(d.abre_em) : '');
   var txt;
-  if(d.motivo === 'confirmada') txt = 'Você confirmou a semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' em ' + fmtTs(d.confirmada_em) + '. Obrigado. A próxima conferência abre ' + quando + '.';
-  else if(d.motivo === 'antes_da_abertura') txt = 'A conferência da semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' abre ' + quando + '. Ela fica aberta até você confirmar. Você recebe um aviso no WhatsApp.';
-  else txt = 'A semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' fechou e foi para o faturamento do jeito que estava. A próxima conferência abre ' + quando + '.';
+  var pI = d.periodo_inicio || d.semana_inicio, pF = d.periodo_fim || d.semana_fim, rot = d.periodo_especial ? 'o período ' : 'a semana ';
+  if(d.motivo === 'confirmada') txt = 'Você confirmou ' + rot + ddmm(pI) + ' – ' + ddmm(pF) + ' em ' + fmtTs(d.confirmada_em) + '. Obrigado. A próxima conferência abre ' + quando + '.';
+  else if(d.motivo === 'antes_da_abertura') txt = 'A conferência d' + rot + ddmm(pI) + ' – ' + ddmm(pF) + ' abre ' + quando + '. Ela fica aberta até você confirmar. Você recebe um aviso no WhatsApp.';
+  else txt = (d.periodo_especial ? 'O período ' : 'A semana ') + ddmm(pI) + ' – ' + ddmm(pF) + ' fechou e foi para o faturamento do jeito que estava. A próxima conferência abre ' + quando + '.';
   if(aviso) aviso.innerHTML = esc(txt);
   if(d.motivo === 'confirmada'){
     lista.innerHTML = '<p class="pf-vazio">Nada a fazer até a próxima semana.</p><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar o relatório da semana (PDF)</button>';
@@ -3605,7 +3608,7 @@ function abreConfirmacao(d){
     $('[data-volta]', mm.el).onclick = mm.fecha;
     return;
   }
-  var m = modal('Confirmar a semana',
+  var m = modal(d.periodo_especial ? 'Confirmar o período' : 'Confirmar a semana',
     '<p style="font-size:16px;margin-bottom:10px">' + (sess.fotoObrigatoria ? 'Para confirmar, tire uma foto sua agora.' : 'Se quiser, tire uma foto.') + '</p>' +
     '<div class="pf-foto"><input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Abrir a câmera</button>' +
       '<img id="pf-prev" style="display:none" alt="sua foto"><p id="pf-info" style="display:none;font-size:13px;color:#666"></p></div>' +
@@ -3668,7 +3671,7 @@ function baixarRelatorio(d){
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text('Conferência semanal — ' + (d.nome || sess.nome || ''), L, y); y += 7;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-    doc.text('Centro Médico Judithe Ferreira · semana ' + ddmm(d.semana_inicio) + ' a ' + ddmm(d.semana_fim) +
+    doc.text('Centro Médico Judithe Ferreira · ' + (d.periodo_especial ? 'período ' : 'semana ') + ddmm(d.periodo_inicio || d.semana_inicio) + ' a ' + ddmm(d.periodo_fim || d.semana_fim) +
              (previa ? ' · prévia gerada em ' + fmtTs(new Date().toISOString()) + ' — sem valor de confirmação'
                      : ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : '')), L, y); y += 4;
     doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 6;
@@ -3773,7 +3776,7 @@ function desenhaSec(d){
   host.innerHTML = '';
   var topo = document.createElement('div'); topo.className = 'oc-topo';
   topo.innerHTML = '<h2>👩‍⚕️ Semana dos profissionais</h2>' +
-    '<div class="pf-sec-topo"><span>Semana <b>' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + '</b></span>' +
+    '<div class="pf-sec-topo"><span>' + (d.periodo_especial ? 'Período especial <b>' + ddmm(d.periodo_inicio) + ' – ' + ddmm(d.periodo_fim) + '</b> (semana ' + ddmm(d.semana_inicio) + ')' : 'Semana <b>' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + '</b>') + '</span>' +
     '<span>Profissionais até <b>' + esc(fmtDiaHora(d.prazo)) + '</b></span>' +
     '<span>Fechamento <b>' + esc(fmtDiaHora(d.fechamento)) + '</b>' + (d.fechada ? ' · <span class="tag-sit tag-s1">fechada</span>' : (d.prazo_passou ? ' · <span class="tag-sit tag-s1">prazo dos profissionais passou</span>' : '')) + '</span>' +
     (painelAdmin() ? '<button type="button" class="gv-btn mini" id="pf-adm-abrir">⚙️ Acessos e configurações</button>' : '') + '</div>';
@@ -3920,7 +3923,7 @@ function campo(id, label, tipo, valor, extra){
 function msgEm(el, txt, erro){ el.textContent = txt; el.className = 'pf-adm-msg' + (erro ? ' erro' : ''); }
 function desenhaAdmin(){
   var host = document.getElementById('gv-conteudo'); if(!host) return;
-  var d = adm.dados, P = d.parametros || {}, H = P.avisos_horas || {}, B = d.balcao || {};
+  var d = adm.dados, P = d.parametros || {}, H = P.avisos_horas || {}, B = d.balcao || {}, J = d.janela || {}, PE = P.periodo_especial || {};
   host.innerHTML = '';
   var topo = document.createElement('div'); topo.className = 'oc-topo';
   topo.innerHTML = '<h2>⚙️ Profissionais — acessos e configurações</h2>' +
@@ -3951,6 +3954,11 @@ function desenhaAdmin(){
         '<div>' + campo('pf-c-ret', 'Guardar fotos (dias)', 'number', P.fotos_retencao_dias, 'min="7" max="3650"') + '</div></div>' +
       '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;margin-top:10px"><input type="checkbox" id="pf-c-foto"' + (P.foto_obrigatoria ? ' checked' : '') + '> exigir foto ao confirmar</label>' +
       '<div class="rodape"><button type="button" class="gv-btn verde" id="pf-c-salvar">Salvar configurações</button><span class="pf-adm-msg" id="pf-c-msg"></span></div></div>' +
+    '<div class="pf-adm-card"><h3>Período especial (só para a semana da vez)</h3>' +
+      '<p class="sub">Semana da vez: <b>' + (J.semana_inicio ? ddmm(J.semana_inicio) + ' – ' + ddmm(J.semana_fim || J.semana_inicio) : '—') + '</b>' + (J.periodo_especial && J.periodo_inicio ? ' · hoje cobrindo <b>' + ddmm(J.periodo_inicio) + ' – ' + ddmm(J.periodo_fim) + '</b>' : ' · sem período especial') + '</p>' +
+      '<p class="sub">Use quando a conferência precisar cobrir mais dias do que a semana (a primeira rodada, por exemplo). Prazo, fechamento e abertura não mudam.</p>' +
+      '<div class="linha2"><div>' + campo('pf-pe-ini', 'De', 'date', PE.inicio) + '</div><div>' + campo('pf-pe-fim', 'Até', 'date', PE.fim) + '</div></div>' +
+      '<div class="rodape"><button type="button" class="gv-btn verde" id="pf-pe-aplicar">Aplicar à semana da vez</button><button type="button" class="gv-btn" id="pf-pe-limpar">Limpar</button><span class="pf-adm-msg" id="pf-pe-msg"></span></div></div>' +
     '<div class="pf-adm-card"><h3>Balcão (secretaria)</h3>' +
       '<p class="sub">Senha compartilhada do balcão para a aba Semana. O telefone recebe o resumo de terça.</p>' +
       campo('pf-b-tel', 'Telefone do balcão', 'text', P.telefone_secretaria || B.telefone, 'inputmode="numeric" placeholder="62999990000"') +
@@ -3972,6 +3980,19 @@ function desenhaAdmin(){
         p_avisos_horas: horas, p_foto_obrigatoria: $('#pf-c-foto', grid).checked, p_fotos_retencao_dias: Number($('#pf-c-ret', grid).value) || null,
         p_abertura_dia: $('#pf-c-abdia', grid).value })
       .then(function(){ msgEm(msg, 'salvo ✔'); }).catch(function(e){ msgEm(msg, humano(e), true); });
+  };
+  $('#pf-pe-aplicar', grid).onclick = function(){
+    var ini = $('#pf-pe-ini', grid).value, fim = $('#pf-pe-fim', grid).value, msg = $('#pf-pe-msg', grid);
+    if(!ini || !fim) return msgEm(msg, 'Preencha as duas datas.', true);
+    if(!J.semana_inicio) return msgEm(msg, 'Atualize a página (SQL v1.8 ainda não instalado).', true);
+    msgEm(msg, 'salvando…');
+    rpc('prof_admin_parametros', { p_senha_admin: adm.senha, p_periodo_especial: { semana: J.semana_inicio, inicio: ini, fim: fim } })
+      .then(function(){ msgEm(msg, 'aplicado ✔'); carregaAdmin(); }).catch(function(e){ msgEm(msg, humano(e), true); });
+  };
+  $('#pf-pe-limpar', grid).onclick = function(){
+    var msg = $('#pf-pe-msg', grid); msgEm(msg, 'limpando…');
+    rpc('prof_admin_parametros', { p_senha_admin: adm.senha, p_periodo_especial: { limpar: true } })
+      .then(function(){ msgEm(msg, 'limpo ✔'); carregaAdmin(); }).catch(function(e){ msgEm(msg, humano(e), true); });
   };
   $('#pf-b-salvar', grid).onclick = function(){
     var s1 = $('#pf-b-s1', grid).value, s2 = $('#pf-b-s2', grid).value, msg = $('#pf-b-msg', grid);
