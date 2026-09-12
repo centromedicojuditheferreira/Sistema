@@ -3525,6 +3525,7 @@ function carregaSemana(inicio){
   }).catch(function(e){ lista.innerHTML = '<p class="pf-erro">' + esc(humano(e)) + '</p>'; });
 }
 function classeStatus(it){
+  if(it.em_feriado) return 'neutro';
   if(it.futuro) return 'fut';
   var t = (it.status_exibido || '').toLowerCase();
   if(t.indexOf('atendido') === 0) return 'ok';
@@ -3536,7 +3537,8 @@ function renderItens(d){
   var lista = document.getElementById('pf-lista');
   document.getElementById('pf-resumo').innerHTML = itens.length ? (itens.length + ' consulta' + (itens.length === 1 ? '' : 's')) : '';
   if(!itens.length){ lista.innerHTML = '<p class="pf-vazio">Nenhuma consulta sua nesta semana.</p>'; return; }
-  lista.innerHTML = linhasHtml(itens);
+  lista.innerHTML = linhasHtml(itens) + '<button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar uma prévia em PDF (ainda não confirmado)</button>';
+  document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
 }
 function linhasHtml(itens){
   var porDia = {}, ordem = [];
@@ -3544,7 +3546,8 @@ function linhasHtml(itens){
   var html = '';
   ordem.forEach(function(data){
     var dt = dLocal(data);
-    html += '<section class="pf-dia"><h2>' + DIAS[dt.getDay()] + ', ' + ddmm(data) + '</h2>';
+    var feriado = porDia[data].some(function(i){ return i.em_feriado; });
+    html += '<section class="pf-dia"><h2>' + DIAS[dt.getDay()] + ', ' + ddmm(data) + (feriado ? ' — feriado' : '') + '</h2>';
     porDia[data].forEach(function(it){
       html += '<div class="pf-item' + (it.futuro ? ' futuro' : '') + '">' +
         '<div class="pf-hora">' + (hhmm(it.horario) || '—') + '</div>' +
@@ -3646,24 +3649,42 @@ function baixarRelatorio(d){
   carregaJsPdf().then(function(jsPDF){
     var doc = new jsPDF({ unit: 'mm', format: 'a4' });
     var itens = d.itens || [], y = 18, L = 14, W = 182, alt = 297;
+    var previa = !d.confirmada_em;
+    var marcaDagua = function(){
+      if(!previa) return;
+      doc.saveGraphicsState && doc.saveGraphicsState();
+      doc.setTextColor(215, 60, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(40);
+      doc.text('DEMONSTRATIVO', 105, 160, { align: 'center', angle: 35 });
+      doc.setFontSize(18); doc.text('SEMANA AINDA NÃO CONFIRMADA', 105, 175, { align: 'center', angle: 35 });
+      doc.restoreGraphicsState && doc.restoreGraphicsState();
+      doc.setTextColor(0);
+    };
+    if(previa){
+      doc.setFillColor(215, 60, 60); doc.rect(L, 10, W, 11, 'F');
+      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text('DEMONSTRATIVO — ESTA SEMANA AINDA NÃO FOI CONFIRMADA PELO PROFISSIONAL', L + W/2, 17.5, { align: 'center' });
+      doc.setTextColor(0); y = 30;
+    }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text('Conferência semanal — ' + (d.nome || sess.nome || ''), L, y); y += 7;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
     doc.text('Centro Médico Judithe Ferreira · semana ' + ddmm(d.semana_inicio) + ' a ' + ddmm(d.semana_fim) +
-             ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : ''), L, y); y += 4;
+             (previa ? ' · prévia gerada em ' + fmtTs(new Date().toISOString()) + ' — sem valor de confirmação'
+                     : ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : '')), L, y); y += 4;
     doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 6;
+    marcaDagua();
     var porDia = {}, ordem = [];
     itens.forEach(function(i){ if(!porDia[i.data]){ porDia[i.data] = []; ordem.push(i.data); } porDia[i.data].push(i); });
     if(!itens.length){ doc.text('Nenhuma consulta na semana.', L, y); }
     ordem.forEach(function(data){
-      if(y > alt - 30){ doc.addPage(); y = 18; }
-      var dt = dLocal(data);
+      if(y > alt - 30){ doc.addPage(); y = 18; marcaDagua(); }
+      var dt = dLocal(data), fer = porDia[data].some(function(i){ return i.em_feriado; });
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-      doc.text(DIAS[dt.getDay()] + ', ' + ddmm(data), L, y); y += 1.5;
+      doc.text(DIAS[dt.getDay()] + ', ' + ddmm(data) + (fer ? ' — feriado' : ''), L, y); y += 1.5;
       doc.setDrawColor(120); doc.line(L, y, L + W, y); y += 5;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
       porDia[data].forEach(function(it){
-        if(y > alt - 15){ doc.addPage(); y = 18; }
+        if(y > alt - 15){ doc.addPage(); y = 18; marcaDagua(); }
         doc.text(hhmm(it.horario) || '—', L, y);
         doc.text(doc.splitTextToSize(it.paciente || '(sem paciente)', 78)[0], L + 14, y);
         doc.text(doc.splitTextToSize(it.convenio || '', 44)[0], L + 96, y);
@@ -3673,10 +3694,10 @@ function baixarRelatorio(d){
       y += 3;
     });
     doc.setFontSize(8); doc.setTextColor(120);
-    doc.text('Gerado em ' + fmtTs(new Date().toISOString()) + ' pela conferência semanal.', L, alt - 10);
-    doc.save('conferencia_' + (d.nome || 'profissional').replace(/[^a-z0-9]+/gi, '_') + '_' + d.semana_inicio + '.pdf');
+    doc.text((previa ? 'PRÉVIA — sem valor de confirmação. ' : '') + 'Gerado em ' + fmtTs(new Date().toISOString()) + ' pela conferência semanal.', L, alt - 10);
+    doc.save((previa ? 'previa_' : 'conferencia_') + (d.nome || 'profissional').replace(/[^a-z0-9]+/gi, '_') + '_' + d.semana_inicio + '.pdf');
   }).catch(function(e){ alert('Não deu para gerar o PDF: ' + e.message); })
-    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = 'Baixar o relatório da semana (PDF)'; } });
+    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = d.confirmada_em ? 'Baixar o relatório da semana (PDF)' : 'Baixar uma prévia em PDF (ainda não confirmado)'; } });
 }
 function comprimeFoto(file){
   return new Promise(function(resolve, reject){
