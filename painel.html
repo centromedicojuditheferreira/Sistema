@@ -141,7 +141,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
 <div id="prof-view" style="display:none">
   <header class="pf-top">
     <div class="pf-top-in">
-      <div class="pf-who"><b id="pf-nome">—</b><span>Confirma&ccedil;&atilde;o semanal &middot; Centro M&eacute;dico Judithe Ferreira</span></div>
+      <div class="pf-who"><b id="pf-nome">—</b><span>Confer&ecirc;ncia de agenda &middot; Centro M&eacute;dico Judithe Ferreira</span></div>
       <button type="button" class="pf-link" onclick="PF.sair()">Sair</button>
     </div>
     <div class="pf-prazo" id="pf-prazo"><div class="pf-prazo-in">
@@ -158,7 +158,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
   </main>
   <footer class="pf-rodape"><div class="pf-rodape-in">
     <p class="pf-ok" id="pf-confirmada" style="display:none"></p>
-    <button type="button" class="pf-btn pf-pri" id="pf-confirmar">Est&aacute; tudo certo &mdash; confirmar</button>
+    <button type="button" class="pf-btn pf-pri" id="pf-confirmar">Confirmar agenda</button>
     <p class="pf-nota" id="pf-nota"></p>
   </div></footer>
 </div>
@@ -3371,13 +3371,13 @@ var MSG = {
   SENHA_INVALIDA:'Senha incorreta.', BLOQUEADO_TEMPORARIAMENTE:'Muitas tentativas. Aguarde 15 minutos e tente de novo.',
   PAPEL_ERRADO:'Este acesso não é de profissional.', DETALHE_OBRIGATORIO:'Explique o que está errado no campo de detalhe.',
   AGENDAMENTO_NAO_E_SEU:'Esta consulta não está na sua agenda.',
-  SEMANA_FECHADA:'Esta semana já foi fechada e seguiu para o faturamento. Fale com a secretaria.',
-  FOTO_OBRIGATORIA:'A confirmação precisa de uma foto.', FOTO_GRANDE:'A foto ficou grande demais. Tente de novo.',
+  SEMANA_FECHADA:'Este período já encerrou e seguiu para o faturamento. Fale com a recepção.',
+  FOTO_OBRIGATORIA:'A confirmação exige o registro fotográfico.', FOTO_GRANDE:'A foto ficou grande demais. Tente novamente.',
   FOTO_INVALIDA:'Não foi possível ler a foto. Tente de novo.', SEM_FOTO:'Esta confirmação não tem foto.',
   SENHA_CURTA:'Senha muito curta.', TELEFONE_INVALIDO:'Telefone inválido — DDD + número, só dígitos.',
   PROFISSIONAL_NAO_EXISTE:'Este profissional não existe no Feegow.', ADMIN_JA_EXISTE:'A senha de administração já foi definida.',
   HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.', PERIODO_INVERTIDO:'A data inicial é depois da final.', PERIODO_INCOMPLETO:'Preencha as duas datas.',
-  AINDA_NAO_ABRIU:'A conferência desta semana ainda não abriu.', JA_CONFIRMADA:'Esta semana já foi confirmada — aguarde a próxima.',
+  AINDA_NAO_ABRIU:'A conferência deste período ainda não foi liberada.', JA_CONFIRMADA:'Este período já foi confirmado. A próxima conferência será liberada na data indicada.',
   SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.'
 };
 var sess = { id:null, senha:null, nome:null, semanas:[], semana:null, fotoObrigatoria:true };
@@ -3478,17 +3478,17 @@ function pintaPrazo(ids, dados, modo){
     box.classList.remove('alerta','passou','fechada');
     var conta = document.getElementById(ids.conta), ate = document.getElementById(ids.ate);
     if(modo === 'prof'){
-      if(dados.motivo === 'confirmada'){ box.classList.remove('alerta','passou','fechada'); conta.textContent = 'Semana confirmada ✔'; ate.textContent = 'Confirmada em ' + fmtTs(dados.confirmada_em) + '. A próxima conferência abre ' + fmtDiaHora(dados.proxima_abertura) + '.'; return; }
+      if(dados.motivo === 'confirmada'){ box.classList.remove('alerta','passou','fechada'); conta.textContent = 'Agenda confirmada'; ate.textContent = 'Registrada em ' + fmtTs(dados.confirmada_em) + '. A próxima conferência será liberada ' + fmtDiaHora(dados.proxima_abertura) + '.'; return; }
       if(dados.motivo === 'antes_da_abertura'){
         var msA = new Date(dados.abre_em).getTime() - agora();
         box.classList.add('fechada');
         var hA = Math.floor(Math.max(0, msA)/36e5), dA = Math.floor(hA/24);
-        conta.textContent = 'Abre ' + fmtDiaHora(dados.abre_em);
-        ate.textContent = msA > 0 ? ('Faltam ' + (dA >= 1 ? dA + ' dia' + (dA>1?'s':'') + ' e ' + (hA%24) + ' h' : hA + ' h') + '. Você recebe um aviso no WhatsApp quando abrir.') : 'Abrindo… recarregue a página.';
+        conta.textContent = 'Liberação ' + fmtDiaHora(dados.abre_em);
+        ate.textContent = msA > 0 ? ('Faltam ' + (dA >= 1 ? dA + ' dia' + (dA>1?'s':'') + ' e ' + (hA%24) + ' h' : hA + ' h') + '. Você será avisado pelo WhatsApp.') : 'Liberando… atualize a página.';
         return;
       }
-      if(agora() > fech.getTime() || dados.motivo === 'fechada'){ box.classList.add('fechada'); conta.textContent = 'Semana fechada'; ate.textContent = 'Esta semana já foi para o faturamento do jeito que estava.' + (dados.proxima_abertura ? ' A próxima abre ' + fmtDiaHora(dados.proxima_abertura) + '.' : ''); return; }
-      if(ms <= 0){ box.classList.add('passou'); conta.textContent = 'Prazo encerrado'; ate.textContent = 'O prazo era ' + fmtDiaHora(dados.prazo) + '. Se ainda houver erro, fale com a secretaria agora.'; return; }
+      if(agora() > fech.getTime() || dados.motivo === 'fechada'){ box.classList.add('fechada'); conta.textContent = 'Período encerrado'; ate.textContent = 'A agenda seguiu para o faturamento com as informações registradas.' + (dados.proxima_abertura ? ' A próxima conferência será liberada ' + fmtDiaHora(dados.proxima_abertura) + '.' : ''); return; }
+      if(ms <= 0){ box.classList.add('passou'); conta.textContent = 'Prazo encerrado'; ate.textContent = 'O prazo era ' + fmtDiaHora(dados.prazo) + '. Se ainda houver alguma correção, informe a recepção imediatamente.'; return; }
     } else if(ms <= 0){
       box.classList.add('fechada'); conta.textContent = 'Semana fechada';
       ate.textContent = 'Fechou ' + fmtDiaHora(dados.fechamento) + '. Profissionais tinham até ' + fmtDiaHora(dados.prazo) + '.'; return;
@@ -3497,7 +3497,7 @@ function pintaPrazo(ids, dados, modo){
     if(h < 24) box.classList.add('alerta');
     conta.textContent = d >= 1 ? ('Faltam ' + d + ' dia' + (d>1?'s':'') + ' e ' + hr + ' h') : (h >= 1 ? ('Faltam ' + h + ' h e ' + min + ' min') : ('Faltam ' + min + ' min'));
     ate.textContent = modo === 'sec' ? ('Fechamento ' + fmtDiaHora(dados.fechamento) + ' · profissionais até ' + fmtDiaHora(dados.prazo))
-                                     : ('Corrija e confirme até ' + fmtDiaHora(dados.prazo) + '.' + (dados.modo_teste ? ' (modo teste até ' + fmtTs(dados.teste_ate) + ')' : ''));
+                                     : ('Prazo para conferir e confirmar: ' + fmtDiaHora(dados.prazo) + '.' + (dados.modo_teste ? ' (acesso de teste até ' + fmtTs(dados.teste_ate) + ')' : ''));
   };
   render(); clearInterval(contadorTimer); contadorTimer = setInterval(render, 30000);
 }
@@ -3539,7 +3539,7 @@ function renderItens(d){
   var lista = document.getElementById('pf-lista');
   document.getElementById('pf-resumo').innerHTML = itens.length ? (itens.length + ' consulta' + (itens.length === 1 ? '' : 's')) : '';
   if(!itens.length){ lista.innerHTML = '<p class="pf-vazio">Nenhuma consulta sua nesta semana.</p>'; return; }
-  lista.innerHTML = linhasHtml(itens) + '<button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar uma prévia em PDF (ainda não confirmado)</button>';
+  lista.innerHTML = linhasHtml(itens) + '<button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar prévia em PDF (sem valor de confirmação)</button>';
   document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
 }
 function linhasHtml(itens){
@@ -3568,15 +3568,15 @@ function renderFechada(d){
   var quando = d.proxima_abertura ? fmtDiaHora(d.proxima_abertura) : (d.abre_em ? fmtDiaHora(d.abre_em) : '');
   var txt;
   var pI = d.periodo_inicio || d.semana_inicio, pF = d.periodo_fim || d.semana_fim, rot = d.periodo_especial ? 'o período ' : 'a semana ';
-  if(d.motivo === 'confirmada') txt = 'Você confirmou ' + rot + ddmm(pI) + ' – ' + ddmm(pF) + ' em ' + fmtTs(d.confirmada_em) + '. Obrigado. A próxima conferência abre ' + quando + '.';
-  else if(d.motivo === 'antes_da_abertura') txt = 'A conferência d' + rot + ddmm(pI) + ' – ' + ddmm(pF) + ' abre ' + quando + '. Ela fica aberta até você confirmar. Você recebe um aviso no WhatsApp.';
-  else txt = (d.periodo_especial ? 'O período ' : 'A semana ') + ddmm(pI) + ' – ' + ddmm(pF) + ' fechou e foi para o faturamento do jeito que estava. A próxima conferência abre ' + quando + '.';
+  if(d.motivo === 'confirmada') txt = 'Sua agenda de ' + ddmm(pI) + ' a ' + ddmm(pF) + ' foi confirmada em ' + fmtTs(d.confirmada_em) + ' e seguirá para o faturamento com as informações conferidas. A próxima conferência será liberada ' + quando + '.';
+  else if(d.motivo === 'antes_da_abertura') txt = 'A conferência da agenda de ' + ddmm(pI) + ' a ' + ddmm(pF) + ' será liberada ' + quando + '. Ela permanece aberta até a sua confirmação. Você será avisado pelo WhatsApp.';
+  else txt = 'O prazo de conferência da agenda de ' + ddmm(pI) + ' a ' + ddmm(pF) + ' encerrou, e ela seguiu para o faturamento com as informações registradas. A próxima conferência será liberada ' + quando + '.';
   if(aviso) aviso.innerHTML = esc(txt);
   if(d.motivo === 'confirmada'){
-    lista.innerHTML = '<p class="pf-vazio">Nada a fazer até a próxima semana.</p><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar o relatório da semana (PDF)</button>';
+    lista.innerHTML = '<p class="pf-vazio">Não há pendências neste período.</p><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar comprovante da conferência (PDF)</button>';
     document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
   } else {
-    lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'antes_da_abertura' ? 'Nada a conferir por enquanto.' : 'Nada a fazer.') + '</p>';
+    lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'antes_da_abertura' ? 'Nenhuma conferência liberada no momento.' : 'Nenhuma pendência.') + '</p>';
   }
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   btn.style.display = 'none'; ok.style.display = 'none'; nota.textContent = '';
@@ -3584,17 +3584,17 @@ function renderFechada(d){
 function renderRodape(d){
   var aviso = document.querySelector('#prof-view .pf-aviso');
   if(aviso) aviso.innerHTML =
-    '<p>Aqui estão as suas consultas da semana. Confira uma por uma.</p>' +
-    '<p>Se alguma estiver errada, <b>avise a recepção pelo WhatsApp</b>. Ela arruma no Feegow, e a mudança leva <b>até 30 minutos</b> para aparecer aqui.</p>' +
-    '<p>Só toque em <b>Está tudo certo</b> quando tudo aqui estiver certo. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>.</p>' +
-    (ehCelular() ? '' : '<p><b>Para confirmar, entre pelo celular</b> — a confirmação tira uma foto sua com a câmera do celular.</p>');
+    '<p>Esta é a sua agenda do período, conforme registrada no sistema da clínica. É a partir dela que os atendimentos são faturados e que o seu repasse é calculado — por isso pedimos a sua conferência.</p>' +
+    '<p>Se alguma consulta estiver com a situação incorreta, informe a recepção pelo WhatsApp. A correção é feita no Feegow e reflete aqui em até 30 minutos.</p>' +
+    '<p>Quando todas as informações estiverem corretas, confirme a agenda. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>; após esse horário, o período segue para o faturamento com as informações registradas.</p>' +
+    (ehCelular() ? '' : '<p>A confirmação é feita pelo celular, com registro fotográfico.</p>');
   document.getElementById('pf-confirmar').style.display = '';
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   var abertos = (d.itens || []).filter(pedidoAberto).length;
-  ok.style.display = 'none'; btn.textContent = 'Está tudo certo — confirmar';
-  nota.textContent = d.fechada ? 'Esta semana já fechou. A confirmação fica registrada como atrasada.'
-    : d.prazo_passou ? 'O prazo passou. A confirmação fica registrada como atrasada.'
-    : (ehCelular() ? 'Ao confirmar, vai pedir uma foto sua.' : 'Para confirmar, entre pelo celular.');
+  ok.style.display = 'none'; btn.textContent = 'Confirmar agenda';
+  nota.textContent = d.fechada ? 'O período encerrou. A confirmação será registrada como posterior ao prazo.'
+    : d.prazo_passou ? 'O prazo encerrou. A confirmação será registrada como posterior ao prazo.'
+    : (ehCelular() ? 'A confirmação inclui um registro fotográfico.' : 'A confirmação é feita pelo celular.');
   btn.onclick = function(){ abreConfirmacao(d); };
 }
 
@@ -3602,18 +3602,18 @@ function renderRodape(d){
 function ehCelular(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); }
 function abreConfirmacao(d){
   if(!ehCelular()){
-    var mm = modal('Confirmar pelo celular',
-      '<p style="font-size:17px">A confirmação tira uma <b>foto sua na hora</b>, com a câmera do celular.</p><p style="font-size:17px">Entre pelo celular, pelo mesmo link, e toque em <b>Está tudo certo</b>.</p>',
+    var mm = modal('A confirmação é feita pelo celular',
+      '<p style="font-size:17px">A confirmação inclui um <b>registro fotográfico</b> feito na hora, pela câmera do celular.</p><p style="font-size:17px">Acesse pelo celular, com o mesmo link, e toque em <b>Confirmar agenda</b>.</p>',
       '<button type="button" class="pf-btn pf-pri" data-volta>Entendi</button>');
     $('[data-volta]', mm.el).onclick = mm.fecha;
     return;
   }
-  var m = modal(d.periodo_especial ? 'Confirmar o período' : 'Confirmar a semana',
-    '<p style="font-size:16px;margin-bottom:10px">' + (sess.fotoObrigatoria ? 'Para confirmar, tire uma foto sua agora.' : 'Se quiser, tire uma foto.') + '</p>' +
-    '<div class="pf-foto"><input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Abrir a câmera</button>' +
+  var m = modal('Confirmar a agenda do período',
+    '<p style="font-size:16px;margin-bottom:10px">' + (sess.fotoObrigatoria ? 'Para registrar a confirmação, tire uma foto sua agora. Ela fica anexada ao comprovante.' : 'Se desejar, registre uma foto.') + '</p>' +
+    '<div class="pf-foto"><input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Tirar a foto</button>' +
       '<img id="pf-prev" style="display:none" alt="sua foto"><p id="pf-info" style="display:none;font-size:13px;color:#666"></p></div>' +
     '<p class="pf-erro" id="pf-cf-erro" style="display:none"></p>',
-    '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-cf-ok"' + (sess.fotoObrigatoria ? ' disabled' : '') + '>Enviar confirmação</button>');
+    '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-cf-ok"' + (sess.fotoObrigatoria ? ' disabled' : '') + '>Registrar confirmação</button>');
   var el = m.el, foto = null;
   $('[data-volta]', el).onclick = m.fecha;
   $('#pf-tirar', el).onclick = function(){ $('#pf-file', el).click(); };
@@ -3624,16 +3624,16 @@ function abreConfirmacao(d){
       foto = res;
       $('#pf-prev', el).src = res.dataUrl; $('#pf-prev', el).style.display = 'block';
       $('#pf-info', el).textContent = Math.round(res.bytes/1024) + ' KB'; $('#pf-info', el).style.display = 'block';
-      $('#pf-tirar', el).textContent = 'Tirar outra'; $('#pf-cf-ok', el).disabled = false;
+      $('#pf-tirar', el).textContent = 'Tirar outra foto'; $('#pf-cf-ok', el).disabled = false;
     }).catch(function(e){ erroEm($('#pf-cf-erro', el), 'Não foi possível preparar a foto: ' + e.message); });
   };
   $('#pf-cf-ok', el).onclick = function(){
     if(sess.fotoObrigatoria && !foto) return erroEm($('#pf-cf-erro', el), MSG.FOTO_OBRIGATORIA);
-    var b = $('#pf-cf-ok', el); b.disabled = true; b.textContent = 'Enviando…';
+    var b = $('#pf-cf-ok', el); b.disabled = true; b.textContent = 'Registrando…';
     rpc('prof_confirmar_semana', { p_profissional_id: sess.id, p_senha: sess.senha, p_semana_inicio: d.semana_inicio, p_observacao: null,
                                    p_foto_base64: foto ? foto.dataUrl : null, p_foto_mime: foto ? 'image/jpeg' : null })
       .then(function(){ m.fecha(); return carregaSemana(d.semana_inicio); })
-      .catch(function(e){ erroEm($('#pf-cf-erro', el), humano(e)); b.disabled = false; b.textContent = 'Enviar confirmação'; });
+      .catch(function(e){ erroEm($('#pf-cf-erro', el), humano(e)); b.disabled = false; b.textContent = 'Registrar confirmação'; });
   };
 }
 /* ═══ relatório em PDF do que foi confirmado (jsPDF carregado só na hora) ═══ */
@@ -3658,22 +3658,22 @@ function baixarRelatorio(d){
       doc.saveGraphicsState && doc.saveGraphicsState();
       doc.setTextColor(215, 60, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(40);
       doc.text('DEMONSTRATIVO', 105, 160, { align: 'center', angle: 35 });
-      doc.setFontSize(18); doc.text('SEMANA AINDA NÃO CONFIRMADA', 105, 175, { align: 'center', angle: 35 });
+      doc.setFontSize(18); doc.text('AGENDA AINDA NÃO CONFIRMADA', 105, 175, { align: 'center', angle: 35 });
       doc.restoreGraphicsState && doc.restoreGraphicsState();
       doc.setTextColor(0);
     };
     if(previa){
       doc.setFillColor(215, 60, 60); doc.rect(L, 10, W, 11, 'F');
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-      doc.text('DEMONSTRATIVO — ESTA SEMANA AINDA NÃO FOI CONFIRMADA PELO PROFISSIONAL', L + W/2, 17.5, { align: 'center' });
+      doc.text('DOCUMENTO DEMONSTRATIVO — AGENDA AINDA NÃO CONFIRMADA PELO PROFISSIONAL', L + W/2, 17.5, { align: 'center' });
       doc.setTextColor(0); y = 30;
     }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text('Conferência semanal — ' + (d.nome || sess.nome || ''), L, y); y += 7;
+    doc.text('Conferência de agenda — ' + (d.nome || sess.nome || ''), L, y); y += 7;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
     doc.text('Centro Médico Judithe Ferreira · ' + (d.periodo_especial ? 'período ' : 'semana ') + ddmm(d.periodo_inicio || d.semana_inicio) + ' a ' + ddmm(d.periodo_fim || d.semana_fim) +
              (previa ? ' · prévia gerada em ' + fmtTs(new Date().toISOString()) + ' — sem valor de confirmação'
-                     : ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : '')), L, y); y += 4;
+                     : ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com registro fotográfico)' : '')), L, y); y += 4;
     doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 6;
     marcaDagua();
     var porDia = {}, ordem = [];
@@ -3697,10 +3697,10 @@ function baixarRelatorio(d){
       y += 3;
     });
     doc.setFontSize(8); doc.setTextColor(120);
-    doc.text((previa ? 'PRÉVIA — sem valor de confirmação. ' : '') + 'Gerado em ' + fmtTs(new Date().toISOString()) + ' pela conferência semanal.', L, alt - 10);
+    doc.text((previa ? 'PRÉVIA — sem valor de confirmação. ' : '') + 'Emitido em ' + fmtTs(new Date().toISOString()) + ' pelo sistema de conferência de agenda do Centro Médico Judithe Ferreira.', L, alt - 10);
     doc.save((previa ? 'previa_' : 'conferencia_') + (d.nome || 'profissional').replace(/[^a-z0-9]+/gi, '_') + '_' + d.semana_inicio + '.pdf');
   }).catch(function(e){ alert('Não deu para gerar o PDF: ' + e.message); })
-    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = d.confirmada_em ? 'Baixar o relatório da semana (PDF)' : 'Baixar uma prévia em PDF (ainda não confirmado)'; } });
+    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = d.confirmada_em ? 'Baixar comprovante da conferência (PDF)' : 'Baixar prévia em PDF (sem valor de confirmação)'; } });
 }
 function comprimeFoto(file){
   return new Promise(function(resolve, reject){
