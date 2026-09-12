@@ -3278,25 +3278,22 @@ return { boot: boot, startTimers: startTimers, stopTimers: stopTimers, recarrega
 #prof-view .pf-aviso p{margin:0 0 8px}
 #prof-view .pf-semanas{display:none}
 #prof-view .pf-resumo{color:#666;font-size:15px;margin:14px 0 0}
-#prof-view .pf-dia{margin-top:22px}
-#prof-view .pf-dia h2{font-size:16px;font-weight:700;color:#111;margin:0;padding:0 0 6px;border-bottom:2px solid #111}
-#prof-view .pf-item{display:grid;grid-template-columns:64px 1fr auto;gap:2px 12px;align-items:baseline;padding:12px 0;border-bottom:1px solid #e5e5e5}
+#prof-view .pf-dia{margin-top:18px}
+#prof-view .pf-dia h2{font-size:16px;font-weight:700;color:#111;margin:0;padding:0 0 4px;border-bottom:2px solid #111}
+#prof-view .pf-item{display:grid;grid-template-columns:52px 1fr auto auto;gap:0 12px;align-items:baseline;padding:7px 0;border-bottom:1px solid #e5e5e5}
 #prof-view .pf-item.futuro{color:#999}
 #prof-view .pf-hora{font-variant-numeric:tabular-nums;font-weight:700}
-#prof-view .pf-nome{font-weight:600;margin:0;font-size:17px}
-#prof-view .pf-sub{color:#666;font-size:15px;margin:0;grid-column:2}
+#prof-view .pf-nome{font-weight:600;margin:0;font-size:17px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#prof-view .pf-sub{color:#666;font-size:14px;margin:0;white-space:nowrap}
 #prof-view .pf-status{font-weight:700;font-size:16px;white-space:nowrap;text-align:right}
 #prof-view .pf-status.ok{color:#0F6B5C}
 #prof-view .pf-status.falta{color:#B03A2E}
 #prof-view .pf-status.neutro{color:#555}
 #prof-view .pf-status.fut{color:#999;font-weight:400}
-#prof-view .pf-acoes{grid-column:2 / 4;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px}
 #prof-view .pf-btn,.pf-btn{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid #bbb;background:#fff;cursor:pointer;font:600 15px var(--fn);color:#111}
 #prof-view .pf-pri,.pf-pri{background:#0F6B5C;border-color:#0F6B5C;color:#fff}
 .pf-pri:disabled{opacity:.55;cursor:default}
-#prof-view .pf-ghost{border-color:transparent;color:#0F6B5C;text-decoration:underline;padding-left:0}
-#prof-view .pf-pedido{grid-column:2 / 4;font-size:15px;color:#7A4E0E;margin-top:2px}
-#prof-view .pf-pedido.fechado{color:#666}
+#prof-view .pf-baixar{display:inline-block;margin-top:12px}
 #prof-view .pf-rodape{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#fff;border-top:1px solid #e5e5e5;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 #prof-view .pf-rodape-in{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
 #prof-view .pf-rodape .pf-btn{width:100%;font-size:18px;min-height:52px}
@@ -3304,9 +3301,10 @@ return { boot: boot, startTimers: startTimers, stopTimers: stopTimers, recarrega
 #prof-view .pf-ok{color:#0F6B5C;font-weight:700;text-align:center;margin:0;font-size:15px}
 #prof-view .pf-vazio,.pf-vazio{padding:28px 0;color:#666}
 #prof-view .pf-erro,.pf-erro{color:#B03A2E;font-size:15px;margin:8px 0 0}
-@media (max-width:520px){
-  #prof-view .pf-item{grid-template-columns:56px 1fr}
-  #prof-view .pf-status{grid-column:2;text-align:left;white-space:normal}
+@media (max-width:560px){
+  #prof-view .pf-item{grid-template-columns:52px 1fr auto}
+  #prof-view .pf-nome{white-space:normal}
+  #prof-view .pf-sub{grid-column:2 / 4;white-space:normal}
 }
 .pf-opcao{display:flex;gap:12px;align-items:flex-start;padding:12px 2px;border-bottom:1px solid #e5e5e5;cursor:pointer;font-size:17px}
 .pf-opcao input{margin-top:5px;width:20px;height:20px}
@@ -3536,9 +3534,11 @@ function classeStatus(it){
 function renderItens(d){
   var itens = d.itens || [];
   var lista = document.getElementById('pf-lista');
-  var pedidos = itens.filter(pedidoAberto).length;
-  document.getElementById('pf-resumo').innerHTML = itens.length ? (itens.length + ' consulta' + (itens.length === 1 ? '' : 's') + (pedidos ? ' · ' + pedidos + ' correção' + (pedidos > 1 ? 'ões' : '') + ' pedida' + (pedidos > 1 ? 's' : '') : '')) : '';
+  document.getElementById('pf-resumo').innerHTML = itens.length ? (itens.length + ' consulta' + (itens.length === 1 ? '' : 's')) : '';
   if(!itens.length){ lista.innerHTML = '<p class="pf-vazio">Nenhuma consulta sua nesta semana.</p>'; return; }
+  lista.innerHTML = linhasHtml(itens);
+}
+function linhasHtml(itens){
   var porDia = {}, ordem = [];
   itens.forEach(function(i){ if(!porDia[i.data]){ porDia[i.data] = []; ordem.push(i.data); } porDia[i.data].push(i); });
   var html = '';
@@ -3546,26 +3546,16 @@ function renderItens(d){
     var dt = dLocal(data);
     html += '<section class="pf-dia"><h2>' + DIAS[dt.getDay()] + ', ' + ddmm(data) + '</h2>';
     porDia[data].forEach(function(it){
-      var podePedir = !it.futuro && !d.fechada && !pedidoAberto(it);
-      html += '<div class="pf-item' + (it.futuro ? ' futuro' : '') + '" data-id="' + it.agendamento_id + '">' +
+      html += '<div class="pf-item' + (it.futuro ? ' futuro' : '') + '">' +
         '<div class="pf-hora">' + (hhmm(it.horario) || '—') + '</div>' +
         '<p class="pf-nome">' + esc(it.paciente || '(sem paciente)') + '</p>' +
+        '<p class="pf-sub">' + esc(it.convenio || 'sem convênio') + '</p>' +
         '<div class="pf-status ' + classeStatus(it) + '">' + esc(it.status_exibido || it.status || '') + '</div>' +
-        '<p class="pf-sub">' + esc(it.convenio || 'sem convênio') + (it.procedimento ? ' · ' + esc(it.procedimento) : '') + '</p>' +
-        (pedidoAberto(it)
-          ? '<div class="pf-pedido">Correção pedida: <b>' + esc(TIPOS[it.pedido_tipo] || it.pedido_tipo) + '</b>' + (it.pedido_detalhe ? ' — ' + esc(it.pedido_detalhe) : '') + '. A recepção vai arrumar; leva até 30 minutos para aparecer aqui.' +
-            '<div class="pf-acoes"><button type="button" class="pf-btn pf-ghost" data-cancela="' + it.pedido_id + '">Cancelar o pedido</button></div></div>'
-          : (it.pedido_id
-              ? '<div class="pf-pedido fechado">' + (it.pedido_situacao === 'atendido' ? 'A recepção arrumou' : (it.pedido_situacao === 'recusado' ? 'A recepção não acatou' : 'Pedido cancelado')) + (it.pedido_atendido_em ? ' em ' + fmtTs(it.pedido_atendido_em) : '') + (it.pedido_resposta ? ' — ' + esc(it.pedido_resposta) : '') + '</div>'
-              : '')) +
-        (podePedir ? '<div class="pf-acoes"><button type="button" class="pf-btn" data-pede="' + it.agendamento_id + '">Pedir correção</button></div>' : '') +
         '</div>';
     });
     html += '</section>';
   });
-  lista.innerHTML = html;
-  Array.prototype.forEach.call(lista.querySelectorAll('button[data-pede]'), function(b){ b.onclick = function(){ abrePedido(Number(b.getAttribute('data-pede'))); }; });
-  Array.prototype.forEach.call(lista.querySelectorAll('button[data-cancela]'), function(b){ b.onclick = function(){ cancelaPedido(Number(b.getAttribute('data-cancela'))); }; });
+  return html;
 }
 function renderFechada(d){
   var lista = document.getElementById('pf-lista'), aviso = document.querySelector('#prof-view .pf-aviso');
@@ -3576,7 +3566,12 @@ function renderFechada(d){
   else if(d.motivo === 'antes_da_abertura') txt = 'A conferência da semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' abre ' + quando + '. Ela fica aberta até você confirmar. Você recebe um aviso no WhatsApp.';
   else txt = 'A semana ' + ddmm(d.semana_inicio) + ' – ' + ddmm(d.semana_fim) + ' fechou e foi para o faturamento do jeito que estava. A próxima conferência abre ' + quando + '.';
   if(aviso) aviso.innerHTML = esc(txt);
-  lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'confirmada' ? 'Nada a fazer até a próxima semana.' : (d.motivo === 'antes_da_abertura' ? 'Nada a conferir por enquanto.' : 'Nada a fazer.')) + '</p>';
+  if(d.motivo === 'confirmada'){
+    lista.innerHTML = '<p class="pf-vazio">Nada a fazer até a próxima semana.</p><button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar o relatório da semana (PDF)</button>';
+    document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
+  } else {
+    lista.innerHTML = '<p class="pf-vazio">' + (d.motivo === 'antes_da_abertura' ? 'Nada a conferir por enquanto.' : 'Nada a fazer.') + '</p>';
+  }
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   btn.style.display = 'none'; ok.style.display = 'none'; nota.textContent = '';
 }
@@ -3584,87 +3579,104 @@ function renderRodape(d){
   var aviso = document.querySelector('#prof-view .pf-aviso');
   if(aviso) aviso.innerHTML =
     '<p>Aqui estão as suas consultas da semana. Confira uma por uma.</p>' +
-    '<p>Se alguma estiver errada, toque em <b>Pedir correção</b> e diga o que aconteceu. A recepção arruma no Feegow.</p>' +
-    '<p>Depois que a recepção arrumar, a mudança leva <b>até 30 minutos</b> para aparecer aqui.</p>' +
-    '<p>Só toque em <b>Está tudo certo</b> quando tudo aqui estiver certo. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>.</p>';
+    '<p>Se alguma estiver errada, <b>avise a recepção pelo WhatsApp</b>. Ela arruma no Feegow, e a mudança leva <b>até 30 minutos</b> para aparecer aqui.</p>' +
+    '<p>Só toque em <b>Está tudo certo</b> quando tudo aqui estiver certo. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>.</p>' +
+    (ehCelular() ? '' : '<p><b>Para confirmar, entre pelo celular</b> — a confirmação tira uma foto sua com a câmera do celular.</p>');
   document.getElementById('pf-confirmar').style.display = '';
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   var abertos = (d.itens || []).filter(pedidoAberto).length;
   ok.style.display = 'none'; btn.textContent = 'Está tudo certo — confirmar';
   nota.textContent = d.fechada ? 'Esta semana já fechou. A confirmação fica registrada como atrasada.'
     : d.prazo_passou ? 'O prazo passou. A confirmação fica registrada como atrasada.'
-    : (abertos ? ('Você ainda tem ' + abertos + ' correção' + (abertos>1?'ões':'') + ' pedida' + (abertos>1?'s':'') + '. Espere a recepção arrumar e a informação aparecer certa aqui antes de confirmar.') : 'Ao confirmar, vai pedir uma foto sua.');
+    : (ehCelular() ? 'Ao confirmar, vai pedir uma foto sua.' : 'Para confirmar, entre pelo celular.');
   btn.onclick = function(){ abreConfirmacao(d); };
 }
 
 /* ═══ confirmação com foto ═══ */
 function ehCelular(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); }
 function abreConfirmacao(d){
-  var celular = ehCelular();
+  if(!ehCelular()){
+    var mm = modal('Confirmar pelo celular',
+      '<p style="font-size:17px">A confirmação tira uma <b>foto sua na hora</b>, com a câmera do celular.</p><p style="font-size:17px">Entre pelo celular, pelo mesmo link, e toque em <b>Está tudo certo</b>.</p>',
+      '<button type="button" class="pf-btn pf-pri" data-volta>Entendi</button>');
+    $('[data-volta]', mm.el).onclick = mm.fecha;
+    return;
+  }
   var m = modal('Confirmar a semana',
     '<p style="font-size:16px;margin-bottom:10px">' + (sess.fotoObrigatoria ? 'Para confirmar, tire uma foto sua agora.' : 'Se quiser, tire uma foto.') + '</p>' +
-    '<div class="pf-foto">' +
-      (celular ? '<input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Abrir a câmera</button>'
-               : '<video id="pf-video" autoplay playsinline muted style="display:none"></video><button type="button" class="pf-btn" id="pf-tirar" style="display:none">Tirar a foto</button><p id="pf-cam-msg" style="font-size:15px;color:#555">Ligando a câmera do computador…</p>') +
+    '<div class="pf-foto"><input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Abrir a câmera</button>' +
       '<img id="pf-prev" style="display:none" alt="sua foto"><p id="pf-info" style="display:none;font-size:13px;color:#666"></p></div>' +
     '<p class="pf-erro" id="pf-cf-erro" style="display:none"></p>',
     '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-cf-ok"' + (sess.fotoObrigatoria ? ' disabled' : '') + '>Enviar confirmação</button>');
-  var el = m.el, foto = null, stream = null;
-  function pararCamera(){ if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; } }
-  var fechaTudo = function(){ pararCamera(); m.fecha(); };
-  $('[data-volta]', el).onclick = fechaTudo;
-  el.querySelector('[data-x]').onclick = fechaTudo;
-  function mostraFoto(res){
-    foto = res;
-    $('#pf-prev', el).src = res.dataUrl; $('#pf-prev', el).style.display = 'block';
-    $('#pf-info', el).textContent = Math.round(res.bytes/1024) + ' KB'; $('#pf-info', el).style.display = 'block';
-    $('#pf-tirar', el).textContent = 'Tirar outra'; $('#pf-cf-ok', el).disabled = false;
-  }
-  if(celular){
-    $('#pf-tirar', el).onclick = function(){ $('#pf-file', el).click(); };
-    $('#pf-file', el).onchange = function(ev){
-      var f = ev.target.files && ev.target.files[0]; if(!f) return;
-      $('#pf-cf-erro', el).style.display = 'none';
-      comprimeFoto(f).then(mostraFoto).catch(function(e){ erroEm($('#pf-cf-erro', el), 'Não foi possível preparar a foto: ' + e.message); });
-    };
-  } else {
-    var video = $('#pf-video', el), msg = $('#pf-cam-msg', el), btn = $('#pf-tirar', el);
-    if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
-      msg.textContent = 'Este computador não permite usar a câmera aqui. Confirme pelo celular.';
-    } else {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: FOTO_CAMERA }, audio: false }).then(function(st){
-        stream = st; video.srcObject = st; video.style.display = 'block'; btn.style.display = ''; msg.style.display = 'none';
-      }).catch(function(){
-        msg.textContent = 'Não foi possível usar a câmera deste computador (sem câmera ou sem permissão). Confirme pelo celular.';
-      });
-    }
-    function capturar(){
-      try{
-        var w = video.videoWidth || 640, h = video.videoHeight || 480;
-        var fator = Math.min(1, FOTO_LADO_MAX / Math.max(w, h));
-        var c = document.createElement('canvas'); c.width = Math.round(w*fator); c.height = Math.round(h*fator);
-        c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
-        var q = FOTO_QUALIDADE, dataUrl = c.toDataURL('image/jpeg', q);
-        while(dataUrl.length > 560*1024*4/3 && q > 0.35){ q -= 0.12; dataUrl = c.toDataURL('image/jpeg', q); }
-        video.style.display = 'none';
-        mostraFoto({ dataUrl: dataUrl, bytes: Math.round((dataUrl.length - dataUrl.indexOf(',') - 1)*3/4) });
-        btn.onclick = outra;
-      }catch(e){ erroEm($('#pf-cf-erro', el), 'Não foi possível tirar a foto: ' + e.message); }
-    }
-    function outra(){
-      $('#pf-prev', el).style.display = 'none'; $('#pf-info', el).style.display = 'none'; video.style.display = 'block';
-      foto = null; $('#pf-cf-ok', el).disabled = !!sess.fotoObrigatoria; btn.textContent = 'Tirar a foto'; btn.onclick = capturar;
-    }
-    btn.onclick = capturar;
-  }
+  var el = m.el, foto = null;
+  $('[data-volta]', el).onclick = m.fecha;
+  $('#pf-tirar', el).onclick = function(){ $('#pf-file', el).click(); };
+  $('#pf-file', el).onchange = function(ev){
+    var f = ev.target.files && ev.target.files[0]; if(!f) return;
+    $('#pf-cf-erro', el).style.display = 'none';
+    comprimeFoto(f).then(function(res){
+      foto = res;
+      $('#pf-prev', el).src = res.dataUrl; $('#pf-prev', el).style.display = 'block';
+      $('#pf-info', el).textContent = Math.round(res.bytes/1024) + ' KB'; $('#pf-info', el).style.display = 'block';
+      $('#pf-tirar', el).textContent = 'Tirar outra'; $('#pf-cf-ok', el).disabled = false;
+    }).catch(function(e){ erroEm($('#pf-cf-erro', el), 'Não foi possível preparar a foto: ' + e.message); });
+  };
   $('#pf-cf-ok', el).onclick = function(){
     if(sess.fotoObrigatoria && !foto) return erroEm($('#pf-cf-erro', el), MSG.FOTO_OBRIGATORIA);
     var b = $('#pf-cf-ok', el); b.disabled = true; b.textContent = 'Enviando…';
     rpc('prof_confirmar_semana', { p_profissional_id: sess.id, p_senha: sess.senha, p_semana_inicio: d.semana_inicio, p_observacao: null,
                                    p_foto_base64: foto ? foto.dataUrl : null, p_foto_mime: foto ? 'image/jpeg' : null })
-      .then(function(){ fechaTudo(); return carregaSemana(d.semana_inicio); })
+      .then(function(){ m.fecha(); return carregaSemana(d.semana_inicio); })
       .catch(function(e){ erroEm($('#pf-cf-erro', el), humano(e)); b.disabled = false; b.textContent = 'Enviar confirmação'; });
   };
+}
+/* ═══ relatório em PDF do que foi confirmado (jsPDF carregado só na hora) ═══ */
+function carregaJsPdf(){
+  return new Promise(function(resolve, reject){
+    if(window.jspdf && window.jspdf.jsPDF) return resolve(window.jspdf.jsPDF);
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    sc.onload = function(){ (window.jspdf && window.jspdf.jsPDF) ? resolve(window.jspdf.jsPDF) : reject(new Error('jsPDF não carregou')); };
+    sc.onerror = function(){ reject(new Error('sem internet para baixar o gerador de PDF')); };
+    document.head.appendChild(sc);
+  });
+}
+function baixarRelatorio(d){
+  var btn = document.getElementById('pf-baixar'); if(btn){ btn.disabled = true; btn.textContent = 'Gerando…'; }
+  carregaJsPdf().then(function(jsPDF){
+    var doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    var itens = d.itens || [], y = 18, L = 14, W = 182, alt = 297;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text('Conferência semanal — ' + (d.nome || sess.nome || ''), L, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text('Centro Médico Judithe Ferreira · semana ' + ddmm(d.semana_inicio) + ' a ' + ddmm(d.semana_fim) +
+             ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com foto)' : ''), L, y); y += 4;
+    doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 6;
+    var porDia = {}, ordem = [];
+    itens.forEach(function(i){ if(!porDia[i.data]){ porDia[i.data] = []; ordem.push(i.data); } porDia[i.data].push(i); });
+    if(!itens.length){ doc.text('Nenhuma consulta na semana.', L, y); }
+    ordem.forEach(function(data){
+      if(y > alt - 30){ doc.addPage(); y = 18; }
+      var dt = dLocal(data);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text(DIAS[dt.getDay()] + ', ' + ddmm(data), L, y); y += 1.5;
+      doc.setDrawColor(120); doc.line(L, y, L + W, y); y += 5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      porDia[data].forEach(function(it){
+        if(y > alt - 15){ doc.addPage(); y = 18; }
+        doc.text(hhmm(it.horario) || '—', L, y);
+        doc.text(doc.splitTextToSize(it.paciente || '(sem paciente)', 78)[0], L + 14, y);
+        doc.text(doc.splitTextToSize(it.convenio || '', 44)[0], L + 96, y);
+        doc.text(it.status_exibido || it.status || '', L + W, y, { align: 'right' });
+        y += 5.5;
+      });
+      y += 3;
+    });
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text('Gerado em ' + fmtTs(new Date().toISOString()) + ' pela conferência semanal.', L, alt - 10);
+    doc.save('conferencia_' + (d.nome || 'profissional').replace(/[^a-z0-9]+/gi, '_') + '_' + d.semana_inicio + '.pdf');
+  }).catch(function(e){ alert('Não deu para gerar o PDF: ' + e.message); })
+    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = 'Baixar o relatório da semana (PDF)'; } });
 }
 function comprimeFoto(file){
   return new Promise(function(resolve, reject){
@@ -3686,44 +3698,14 @@ function comprimeFoto(file){
   });
 }
 
-/* ═══ pedido de correção ═══ */
-function abrePedido(agId){
-  var it = (semanaAtual.itens || []).find(function(i){ return i.agendamento_id === agId; });
-  if(!it) return;
-  var opts = Object.keys(TIPOS).map(function(k){
-    return '<label class="pf-opcao"><input type="radio" name="pf-tipo" value="' + k + '"' + (it.pedido_tipo === k ? ' checked' : '') + '><span>' + esc(TIPOS[k]) + '</span></label>'; }).join('');
-  var m = modal('O que aconteceu nesta consulta?',
-    '<p style="font-size:13px;color:var(--txt2);margin-bottom:8px">' + esc(it.paciente || '') + ' · ' + DIAS[dLocal(it.data).getDay()] + ' ' + ddmm(it.data) + ' às ' + hhmm(it.horario) + ' · hoje: ' + esc(it.status || 'sem status') + '</p>' + opts +
-    '<div class="fg" style="margin-top:12px"><label class="fl">Quer explicar algo? (obrigatório em "Outra coisa")</label><textarea class="fc" id="pf-det" style="min-height:80px">' + esc(it.pedido_detalhe || '') + '</textarea></div>' +
-    '<p class="pf-erro" id="pf-sh-erro" style="display:none"></p>',
-    '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-sh-ok">Pedir à recepção</button>');
-  var el = m.el;
-  $('[data-volta]', el).onclick = m.fecha;
-  $('#pf-sh-ok', el).onclick = function(){
-    var sel = el.querySelector('input[name=pf-tipo]:checked'), tipo = sel ? sel.value : null, det = $('#pf-det', el).value.trim();
-    if(!tipo) return erroEm($('#pf-sh-erro', el), 'Escolha uma opção.');
-    if(tipo === 'outro' && !det) return erroEm($('#pf-sh-erro', el), 'Explique o que está errado.');
-    var b = $('#pf-sh-ok', el); b.disabled = true;
-    rpc('prof_pedir_correcao', { p_profissional_id: sess.id, p_senha: sess.senha, p_agendamento_id: agId, p_tipo: tipo, p_detalhe: det || null })
-      .then(function(){ m.fecha(); return carregaSemana(semanaAtual.semana_inicio); })
-      .catch(function(e){ erroEm($('#pf-sh-erro', el), humano(e)); b.disabled = false; });
-  };
-}
-function cancelaPedido(pedidoId){
-  if(!confirm('Cancelar este pedido de correção?')) return;
-  rpc('prof_cancelar_pedido', { p_profissional_id: sess.id, p_senha: sess.senha, p_pedido_id: pedidoId })
-    .then(function(){ return carregaSemana(semanaAtual.semana_inicio); })
-    .catch(function(e){ alert(humano(e)); });
-}
-
 /* ═══ SECRETARIA — aba 👩‍⚕️ Semana no módulo GV ═══ */
 function secretaria(){
   var host = document.getElementById('gv-conteudo'); if(!host) return;
   host.innerHTML = '';
   var topo = document.createElement('div'); topo.className = 'oc-topo';
   topo.innerHTML = '<h2>👩‍⚕️ Semana dos profissionais</h2>' +
-    '<p>Cada profissional confere a própria agenda e confirma até <b>segunda</b>. O que ele marcou como errado vira <b>pedido</b> aqui: ' +
-    'corrija no Feegow e clique <b>Corrigi no Feegow</b>. A semana fecha na <b>terça ao meio-dia</b> — o planejador roda na quarta de madrugada com o que estiver no Feegow.</p>';
+    '<p>Cada profissional confere a própria agenda a partir de domingo e confirma até <b>segunda</b>. Se algo estiver errado, ele avisa o balcão pelo WhatsApp e vocês corrigem no Feegow. ' +
+    'A semana fecha na <b>terça ao meio-dia</b> — o planejador roda na quarta de madrugada com o que estiver no Feegow.</p>';
   host.appendChild(topo);
   if(!secr.senha){
     var f = document.createElement('div'); f.className = 'pf-form';
@@ -3801,10 +3783,11 @@ function desenhaSec(d){
   Array.prototype.forEach.call(tb.querySelectorAll('button[data-tel]'), function(b){ b.onclick = function(){ editaTelefoneBalcao(Number(b.getAttribute('data-tel')), d); }; });
 
   var ped = d.pedidos || [];
-  var s = document.createElement('div'); s.className = 'adm-sec';
-  s.innerHTML = 'Pedidos de correção <small>(' + ped.filter(function(p){ return p.situacao === 'aberto'; }).length + ' abertos · corrija no Feegow e marque; verde = o sistema já viu a mudança chegar)</small>';
-  host.appendChild(s);
-  if(!ped.length){ var v = document.createElement('p'); v.className = 'gv-vazio'; v.textContent = 'Nenhum pedido nesta semana.'; host.appendChild(v); }
+  if(ped.length){
+    var s = document.createElement('div'); s.className = 'adm-sec';
+    s.innerHTML = 'Pedidos de correção <small>(' + ped.filter(function(p){ return p.situacao === 'aberto'; }).length + ' abertos · corrija no Feegow e marque; verde = o sistema já viu a mudança chegar)</small>';
+    host.appendChild(s);
+  }
   ped.forEach(function(p){
     var aberto = p.situacao === 'aberto';
     var card = document.createElement('article');
