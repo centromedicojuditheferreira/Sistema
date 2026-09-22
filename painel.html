@@ -4060,11 +4060,13 @@ function desenhaAdmin(){
     'Remover um acesso não apaga o histórico de semanas e pedidos.</p>' +
     '<div class="pf-form"><button type="button" class="gv-btn" id="pf-adm-voltar">← Voltar para a semana</button>' +
     '<button type="button" class="gv-btn" id="pf-adm-recarregar">↻ Atualizar</button>' +
-    '<button type="button" class="gv-btn verde" id="pf-adm-repasse">💰 Repasse — regimes e recibos</button></div>';
+    '<button type="button" class="gv-btn verde" id="pf-adm-repasse">💰 Repasse — regimes e recibos</button>' +
+    '<button type="button" class="gv-btn verde" id="pf-adm-f5">💵 Demonstrativos Unimed (F5)</button></div>';
   host.appendChild(topo);
   $('#pf-adm-voltar', topo).onclick = function(){ host.innerHTML = ''; carregaSec(secr.semana); };
   $('#pf-adm-recarregar', topo).onclick = carregaAdmin;
   $('#pf-adm-repasse', topo).onclick = function(){ carregaRepasse(null); };
+  $('#pf-adm-f5', topo).onclick = carregaF5;
 
   var urlSugerida = P.url_pagina || (location.href.split('?')[0].split('#')[0] + '?conferir=1');
   var grid = document.createElement('div'); grid.className = 'pf-adm-grid';
@@ -4208,6 +4210,170 @@ function removeAcesso(profId){
   if(!confirm('Remover o acesso de ' + p.nome_feegow + '?\n\nO histórico de semanas e pedidos continua guardado. Para só impedir a entrada, use Editar → desmarcar "acesso ativo".')) return;
   rpc('prof_admin_remover_acesso', { p_senha_admin: adm.senha, p_profissional_id: profId })
     .then(function(){ carregaAdmin(); }).catch(function(e){ alert(humano(e)); });
+}
+
+/* ═══ 💵 F5 — DEMONSTRATIVOS UNIMED (administrador) · v1.1 (22/09/2026) ═══
+   Sobe o XML "análise de conta" da Unimed (ensaio → valer), lista os itens presos
+   aguardando decisão, o catálogo de glosas e os demonstrativos lançados.
+   Tudo via RPC f5_* (senha de administração = adm.senha). */
+var F5_ROTULO = { paga:'✅ Pagas', paga_parcial:'✅ Pagas a menor', divida:'❌ Glosadas → dívida', cancelar:'❌ Glosadas → canceladas (já pagas)',
+  duplicata:'♻️ Duplicatas (f0 segue a paga)', estorno:'↩️ Estornos', sem_par:'🧾 Pagas sem par (consumo fora do sistema)',
+  sem_par_glosada:'📝 Glosadas sem par (só registro)', decidir:'🔒 Presas aguardando decisão' };
+var F5_DECISOES = [['divida','Dívida'],['cancelar','Cancelar'],['paga','Paga'],['ignorar','Ignorar']];
+var F5_TRATAMENTOS = [['divida','dívida'],['paga','paga'],['cancelar','cancelar'],['estorno','estorno'],['decidir','decidir']];
+function f5Get(rota){
+  return fetch(PCFG.url + '/rest/v1/' + rota, { headers:{ 'apikey':PCFG.key, 'Authorization':'Bearer ' + PCFG.key } })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+function f5Num(v){ return brl(v == null ? 0 : v); }
+function carregaF5(){
+  var host = document.getElementById('gv-conteudo'); if(!host) return;
+  host.innerHTML = '<p class="gv-vazio">Carregando…</p>';
+  Promise.all([ f5Get('f5_vw_alertas_abertos?select=*'), f5Get('f5_vw_demonstrativos?select=*&limit=36'), f5Get('f5_glosa_codigos?select=*&order=codigo') ])
+    .then(function(r){ desenhaF5({ presos:r[0], dems:r[1], cat:r[2] }); })
+    .catch(function(e){ host.innerHTML = '<p class="gv-vazio">⚠️ ' + esc(humano(e)) + '</p>'; });
+}
+function desenhaF5(d){
+  var host = document.getElementById('gv-conteudo'); if(!host) return;
+  host.innerHTML = '';
+  var topo = document.createElement('div'); topo.className = 'oc-topo';
+  topo.innerHTML = '<h2>💵 Demonstrativos Unimed — F5</h2>' +
+    '<p>Suba o XML "análise de conta" que a Unimed devolve. O ensaio só mostra o que aconteceria; lançar a valer marca as guias como pagas, devolve as glosadas para a dívida ou cancela as já pagas, e prende o que o sistema não reconhece para você decidir aqui.</p>' +
+    '<div class="pf-form"><button type="button" class="gv-btn" id="f5-voltar">← Administração</button>' +
+    '<button type="button" class="gv-btn" id="f5-atualizar">↻ Atualizar</button>' +
+    '<button type="button" class="gv-btn verde" id="f5-subir">📄 Subir XML do demonstrativo (ensaio)</button><span class="pf-adm-msg" id="f5-msg"></span></div>';
+  host.appendChild(topo);
+  $('#f5-voltar', topo).onclick = carregaAdmin;
+  $('#f5-atualizar', topo).onclick = carregaF5;
+  $('#f5-subir', topo).onclick = f5Subir;
+
+  /* presos */
+  var sec = document.createElement('div'); sec.className = 'adm-sec';
+  sec.innerHTML = '🔒 Itens presos aguardando a sua decisão <small>(' + d.presos.length + ')</small>';
+  host.appendChild(sec);
+  var box = document.createElement('div'); host.appendChild(box);
+  if(!d.presos.length){ box.innerHTML = '<p class="gv-vazio">Nada preso. 👍</p>'; }
+  else {
+    var h = '<table class="adm"><tr><th>Dem</th><th>Lote · guia</th><th>Sessão</th><th>Valores</th><th>Motivo</th><th>Decidir</th></tr>';
+    d.presos.forEach(function(p){
+      h += '<tr><td>' + esc(p.numero_demonstrativo) + '<br><small>' + esc(p.convenio || '') + '</small></td>' +
+        '<td>L' + esc(p.numero_lote) + ' · ' + esc(p.numero_guia_prestador) + '<br><small>op. ' + esc(p.numero_guia_operadora) + '</small></td>' +
+        '<td>' + esc(dmy(p.data_realizacao)) + '<br><small>' + esc(p.codigo_procedimento) + '</small></td>' +
+        '<td>inf ' + f5Num(p.valor_informado) + '<br>lib ' + f5Num(p.valor_liberado) + (p.glosa_codigo ? '<br><small>glosa ' + esc(p.glosa_codigo) + (p.glosa_descricao ? ' — ' + esc(p.glosa_descricao) : '') + '</small>' : '') + '</td>' +
+        '<td style="max-width:320px">' + esc(p.motivo || '') + (p.f0_id ? '<br><small>f0 #' + p.f0_id + '</small>' : '<br><small>sem par na f0 — só cabe ignorar</small>') + '</td>' +
+        '<td style="white-space:nowrap">' + F5_DECISOES.map(function(x){ return '<button type="button" class="gv-btn mini" data-dec="' + x[0] + '" data-item="' + p.item_id + '">' + x[1] + '</button>'; }).join(' ') + '</td></tr>';
+    });
+    box.innerHTML = h + '</table>';
+    box.addEventListener('click', function(ev){
+      var b = ev.target.closest('button[data-dec]'); if(!b) return;
+      var dec = b.getAttribute('data-dec'), id = Number(b.getAttribute('data-item'));
+      var obs = prompt('Decisão "' + dec + '" para o item ' + id + '. Observação (opcional):'); if(obs === null) return;
+      b.disabled = true;
+      rpc('f5_decidir_item', { p_item_id:id, p_decisao:dec, p_senha:adm.senha, p_quem:'painel', p_observacao:obs || null })
+        .then(function(r){ alert('Feito: ' + (r.acao || dec)); carregaF5(); })
+        .catch(function(e){ alert(humano(e)); b.disabled = false; });
+    });
+  }
+
+  /* catálogo */
+  sec = document.createElement('div'); sec.className = 'adm-sec';
+  sec.innerHTML = '📚 Catálogo de glosas <small>(tratamento por código; código novo entra como "decidir")</small>';
+  host.appendChild(sec);
+  var cat = document.createElement('div'); host.appendChild(cat);
+  var hc = '<table class="adm"><tr><th>Código</th><th>Descrição</th><th>Tratamento</th><th>Zera guia</th><th>Decidido</th><th></th></tr>';
+  d.cat.forEach(function(c){
+    hc += '<tr data-cod="' + esc(c.codigo) + '"><td><b>' + esc(c.codigo) + '</b></td>' +
+      '<td><input type="text" class="pf-adm-busca" data-desc value="' + esc(c.descricao || '') + '" style="width:100%;min-width:220px"></td>' +
+      '<td><select class="pf-adm-busca" data-trat style="width:auto">' + F5_TRATAMENTOS.map(function(t){ return '<option value="' + t[0] + '"' + (t[0] === c.tratamento ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></td>' +
+      '<td><input type="checkbox" data-zera' + (c.zera_guia ? ' checked' : '') + '></td>' +
+      '<td><small>' + (c.decidido_por ? esc(c.decidido_por) + ' · ' + fmtTs(c.decidido_em) : '—') + '</small></td>' +
+      '<td><button type="button" class="gv-btn mini" data-salvar>Salvar</button></td></tr>';
+  });
+  cat.innerHTML = hc + '</table><div class="pf-form" style="margin-top:8px"><button type="button" class="gv-btn" id="f5-reproc">↻ Reprocessar presos pelo catálogo</button><span class="pf-adm-msg" id="f5-reproc-msg"></span></div>';
+  cat.addEventListener('click', function(ev){
+    var b = ev.target.closest('button[data-salvar]'); if(!b) return;
+    var tr = b.closest('tr'), cod = tr.getAttribute('data-cod');
+    b.disabled = true;
+    rpc('f5_decidir_codigo', { p_codigo:cod, p_tratamento:$('[data-trat]', tr).value, p_zera_guia:$('[data-zera]', tr).checked,
+                               p_senha:adm.senha, p_quem:'painel', p_descricao:$('[data-desc]', tr).value || null })
+      .then(function(r){ alert('Código ' + cod + ' → ' + r.tratamento + (r.presos_com_este_codigo ? ' · ' + r.presos_com_este_codigo + ' preso(s) com este código: use "Reprocessar presos"' : '')); b.disabled = false; })
+      .catch(function(e){ alert(humano(e)); b.disabled = false; });
+  });
+  $('#f5-reproc', cat).onclick = function(){
+    var msg = $('#f5-reproc-msg', cat); msgEm(msg, 'reprocessando…');
+    rpc('f5_reprocessar_presos', { p_senha:adm.senha, p_quem:'painel' })
+      .then(function(r){ msgEm(msg, r.reprocessados + ' item(ns) aplicado(s) ✔'); carregaF5(); })
+      .catch(function(e){ msgEm(msg, humano(e), true); });
+  };
+
+  /* demonstrativos lançados */
+  sec = document.createElement('div'); sec.className = 'adm-sec';
+  sec.innerHTML = '📑 Demonstrativos lançados <small>(líquido esperado = (liberado − estornos) − 2%; confira com o "Valor Líquido" do portal)</small>';
+  host.appendChild(sec);
+  var dm = document.createElement('div'); host.appendChild(dm);
+  if(!d.dems.length){ dm.innerHTML = '<p class="gv-vazio">Nenhum demonstrativo lançado ainda.</p>'; }
+  else {
+    var hd = '<table class="adm"><tr><th>Nº</th><th>Convênio</th><th>Pagamento</th><th>Lotes</th><th>Itens</th><th>Liberado</th><th>Estornos</th><th>Líquido esperado</th><th>Presos</th><th>Lançado</th></tr>';
+    d.dems.forEach(function(x){
+      hd += '<tr><td><b>' + esc(x.numero_demonstrativo) + '</b></td><td>' + esc(x.convenio || '') + '</td><td>' + esc(dmy(x.data_emissao)) + '</td>' +
+        '<td><small>' + esc((x.lotes || []).join(', ')) + '</small></td><td>' + x.qt_itens + '</td><td>' + f5Num(x.valor_liberado) + '</td><td>' + f5Num(x.valor_estornos) + '</td>' +
+        '<td><b>' + f5Num(x.valor_liquido_esperado) + '</b></td><td>' + (x.presos_abertos ? '🔒 ' + x.presos_abertos : '—') + '</td>' +
+        '<td><small>' + esc(x.importado_por || '') + ' · ' + fmtTs(x.importado_em) + '</small></td></tr>';
+    });
+    dm.innerHTML = hd + '</table>';
+  }
+}
+function f5Subir(){
+  fx4PedeXML(function(file){
+    fx4LerArquivo(file, function(txt){ f5Rodar(txt, file.name, 'ensaio'); }, function(e){ alert(humano(e)); });
+  });
+}
+function f5Rodar(txt, nome, modo){
+  var m = modal(modo === 'valer' ? 'Lançando a valer…' : 'Ensaio…', '<p class="sub">Lendo ' + esc(nome) + ' e casando com o sistema. Alguns segundos.</p>', '');
+  rpc('f5_importar_demonstrativo', { p_xml:txt, p_modo:modo, p_senha:adm.senha, p_quem:'painel', p_arquivo:nome })
+    .then(function(r){ m.fecha(); f5Relatorio(r, txt, nome); })
+    .catch(function(e){ m.fecha(); alert(humano(e)); });
+}
+function f5Relatorio(r, txt, nome){
+  var D = r.demonstrativo || {}, V = r.vereditos || {}, G = r.glosas_por_codigo || {};
+  var h = '<p class="sub"><b>Demonstrativo ' + esc(D.numero) + '</b> · ' + esc(D.convenio) + ' · pagamento ' + esc(dmy(D.emissao)) + ' · lotes ' + esc((D.lotes || []).join(', ')) + ' · ' + D.guias + ' guias · ' + D.itens + ' itens' +
+    (D.totais_conferem ? ' · totais ✔' : ' · <b style="color:#b00">totais NÃO conferem</b>') + ' · no malote ' + D.itens_no_malote + '/' + D.itens + '</p>' +
+    '<div class="pf-adm-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0">' +
+      '<div class="pf-adm-card"><small>Informado</small><br><b>' + f5Num(D.informado) + '</b></div>' +
+      '<div class="pf-adm-card"><small>Liberado</small><br><b>' + f5Num(D.liberado) + '</b></div>' +
+      '<div class="pf-adm-card"><small>Glosa</small><br><b>' + f5Num(D.glosa) + '</b></div>' +
+      '<div class="pf-adm-card"><small>Estornos</small><br><b>' + f5Num(D.estornos) + '</b></div>' +
+      '<div class="pf-adm-card" style="border:2px solid var(--tinta)"><small>LÍQUIDO ESPERADO (−' + D.retencao_pct + '%)</small><br><b style="font-size:18px">' + f5Num(D.liquido_esperado) + '</b><br><small>confira com o portal</small></div></div>';
+  h += '<table class="adm"><tr><th>Veredito</th><th>Itens</th><th>Liberado</th></tr>';
+  Object.keys(V).sort(function(a,b){ return V[b].n - V[a].n; }).forEach(function(k){
+    h += '<tr><td>' + esc(F5_ROTULO[k] || k) + '</td><td>' + V[k].n + '</td><td>' + f5Num(V[k].valor_liberado) + '</td></tr>';
+  });
+  h += '</table>';
+  var gk = Object.keys(G);
+  if(gk.length){
+    h += '<div class="adm-sec" style="margin-top:12px">Glosas por código</div><table class="adm"><tr><th>Código</th><th>Descrição</th><th>Itens</th><th>Valor</th><th>Tratamento</th></tr>';
+    gk.forEach(function(k){ h += '<tr><td><b>' + esc(k) + '</b></td><td>' + esc(G[k].descricao || '(sem descrição)') + '</td><td>' + G[k].n + '</td><td>' + f5Num(G[k].valor) + '</td><td>' + esc(G[k].tratamento) + '</td></tr>'; });
+    h += '</table>';
+  }
+  if((r.presos || []).length){
+    h += '<div class="adm-sec" style="margin-top:12px">🔒 Ficariam presos (' + r.presos.length + ')</div><table class="adm"><tr><th>Lote · guia</th><th>Sessão</th><th>Lib</th><th>Motivo</th></tr>';
+    r.presos.slice(0, 40).forEach(function(p){ h += '<tr><td>L' + esc(p.lote) + ' · ' + esc(p.guia_prestador) + '</td><td>' + esc(dmy(p.data)) + ' ' + esc(p.codigo) + '</td><td>' + f5Num(p.liberado) + '</td><td>' + esc(p.motivo) + '</td></tr>'; });
+    if(r.presos.length > 40) h += '<tr><td colspan="4">… e mais ' + (r.presos.length - 40) + '</td></tr>';
+    h += '</table>';
+  }
+  h += '<p class="sub" style="margin-top:10px">Baixas na guia: ' + (r.baixas || []).length + '</p>';
+  if((r.avisos || []).length) h += '<ul>' + r.avisos.map(function(a){ return '<li>⚠️ ' + esc(a) + '</li>'; }).join('') + '</ul>';
+  var m = modal((r.modo === 'valer' ? '✅ Lançado a valer' : '🔎 Ensaio') + ' — ' + esc(nome), h,
+    '<button type="button" class="pf-btn" data-volta>Fechar</button>' +
+    (r.modo === 'ensaio' ? '<button type="button" class="pf-btn pf-pri" id="f5-valer">✅ Lançar a valer</button>' : ''));
+  var mb = m.el.querySelector('.mb'); if(mb) mb.style.maxWidth = '900px';
+  $('[data-volta]', m.el).onclick = function(){ m.fecha(); if(r.modo === 'valer') carregaF5(); };
+  var bv = $('#f5-valer', m.el);
+  if(bv) bv.onclick = function(){
+    if(!D.totais_conferem && !confirm('Os totais do arquivo não conferem com a soma dos itens. Lançar mesmo assim vai ser recusado pelo banco. Tentar?')) return;
+    if(!confirm('Lançar o demonstrativo ' + D.numero + ' a valer? Isto marca as guias como pagas e devolve as glosadas para a dívida.')) return;
+    m.fecha(); f5Rodar(txt, nome, 'valer');
+  };
 }
 
 /* ═══ 💰 REPASSE — regimes, regime por profissional, recibos do mês (administrador) ═══ */
