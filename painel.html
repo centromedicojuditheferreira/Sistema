@@ -3289,6 +3289,11 @@ return { boot: boot, startTimers: startTimers, stopTimers: stopTimers, recarrega
 .pf-previa-t{width:100%;border-collapse:collapse;font-size:14px}.pf-previa-t td{padding:5px 0;border-top:1px solid #eee;vertical-align:top}
 .pf-previa-t td.num{text-align:right;white-space:nowrap}.pf-previa-t td.un{color:#777;font-size:12.5px;white-space:nowrap;padding-left:8px}
 .pf-previa-nota{font-size:12.5px;color:#777;margin:8px 0 0}
+.rp-pv td.num,.rp-pv th.num{text-align:right;white-space:nowrap}
+.rp-pv tr.tot td{border-top:2px solid var(--tinta-2);font-weight:700}
+.rp-pv tr.rp-conta td{background:#F7F9FC;font-size:12.5px;padding-top:4px;padding-bottom:8px}
+.rp-pv .rp-reg{display:block;font-size:11.5px;color:#777;margin-top:2px}
+.rp-pv .rp-sub{display:block;font-size:11.5px;color:#777}
 #prof-view .pf-semanas{display:none}
 #prof-view .pf-resumo{color:#666;font-size:15px;margin:14px 0 0}
 #prof-view .pf-dia{margin-top:18px}
@@ -3639,7 +3644,7 @@ function carregaPrevia(d){
 }
 function previaLinhas(r){
   return (r.resumo || []).map(function(x){
-    var un = (x.quantidade > 0 && x.descricao !== 'Particular' && !/R\$/.test(x.descricao)) ? (x.quantidade + ' × ' + brl(x.valor / x.quantidade)) : (x.quantidade + (x.descricao === 'Particular' ? ' (60% do valor cobrado)' : ''));
+    var un = (x.quantidade > 0 && x.descricao !== 'Particular' && !/R\$/.test(x.descricao)) ? (x.quantidade + ' × ' + brl(x.valor / x.quantidade)) : (x.quantidade + (x.descricao === 'Particular' ? ' (sobre o valor cobrado)' : ''));
     return { descricao: x.descricao, un: un, valor: brl(x.valor) };
   });
 }
@@ -4171,7 +4176,7 @@ function desenhaAdmin(){
     'Remover um acesso não apaga o histórico de semanas e pedidos.</p>' +
     '<div class="pf-form"><button type="button" class="gv-btn" id="pf-adm-voltar">← Voltar para a semana</button>' +
     '<button type="button" class="gv-btn" id="pf-adm-recarregar">↻ Atualizar</button>' +
-    '<button type="button" class="gv-btn verde" id="pf-adm-repasse">💰 Repasse — regimes e recibos</button>' +
+    '<button type="button" class="gv-btn verde" id="pf-adm-repasse">💰 Repasse — quanto cada um recebe</button>' +
     '<button type="button" class="gv-btn verde" id="pf-adm-f5">💵 Demonstrativos Unimed (F5)</button></div>';
   host.appendChild(topo);
   $('#pf-adm-voltar', topo).onclick = function(){ host.innerHTML = ''; carregaSec(secr.semana); };
@@ -4538,6 +4543,49 @@ function carregaRepasse(comp){
   rpc('rep_admin_listar', { p_senha_admin: adm.senha, p_competencia: comp }).then(function(d){ desenhaRepasse(d); })
     .catch(function(e){ host.innerHTML = '<p class="gv-vazio">⚠️ ' + esc(humano(e)) + '</p>'; });
 }
+function desenhaPreviaAdmin(pv, box, totEl, d){
+  if(pv.mes_em_andamento){
+    box.innerHTML = '<p class="gv-vazio">' + esc(pv.mes_nome) + ' ainda não terminou. Os valores aparecem a partir do dia 1 do mês seguinte — antes disso, as consultas que ainda vão acontecer contariam como falta.</p>';
+    return;
+  }
+  var L = pv.linhas || [];
+  if(!L.length){ box.innerHTML = '<p class="gv-vazio">Nenhum profissional com recibo neste mês.</p>'; return; }
+  if(totEl) totEl.textContent = '(total ' + brl(pv.total_a_receber) + ' · ' + pv.n_recibos + ' com recibo emitido · ' + pv.n_previas + ' em prévia' + (pv.n_sem_regime ? ' · ' + pv.n_sem_regime + ' sem regime' : '') + ')';
+  var verde = 'style="background:var(--ok-fundo);color:var(--ok)"';
+  var h = '<p class="sub" style="margin:2px 0 10px">Calculado agora, pelas mesmas regras do recibo. Enquanto o profissional não confirma, o valor é uma <b>prévia</b> e muda com as correções no Feegow (que chegam até a manhã seguinte). Depois da confirmação, vale o <b>recibo emitido</b>.</p>' +
+    '<div style="overflow-x:auto"><table class="adm rp-pv"><tr><th>Profissional</th><th class="num">Atendidos</th><th class="num">Faltas</th><th>% de agenda</th><th class="num">A receber</th><th>Conferência</th><th></th></tr>';
+  L.forEach(function(x, i){
+    var nome = '<b>' + esc(x.nome) + '</b>' + (x.situacao && x.situacao !== 'ativo' ? ' <span class="tag-sit tag-s1">' + esc(x.situacao) + '</span>' : '');
+    var conf = x.confirmou_em ? '<span class="tag-sit" ' + verde + '>confirmou ' + fmtTs(x.confirmou_em) + '</span>'
+             : (x.tem_acesso ? '<span class="tag-sit">aguardando</span>' : '<span class="tag-sit">sem acesso</span>');
+    if(x.erro){
+      h += '<tr><td>' + nome + '</td><td colspan="4"><span class="tag-sit tag-s0">' + (x.erro === 'SEM_REGIME' ? 'defina o regime na tabela abaixo' : esc(humano(new Error(x.erro)))) + '</span></td><td>' + conf + '</td><td></td></tr>';
+      return;
+    }
+    var pct = esc(x.pct_texto || '—');
+    if(x.usa_corte) pct += '<span class="rp-sub">' + (x.atingiu_corte
+      ? '<span class="tag-sit" ' + verde + '>≥ ' + x.corte_pct + '% · plano ' + brl(x.plano_alto) + '</span>'
+      : '<span class="tag-sit tag-s1">abaixo de ' + x.corte_pct + '% · plano ' + brl(x.plano_baixo) + '</span>') + '</span>';
+    var val = '<b>' + brl(x.a_receber) + '</b><span class="rp-sub">' +
+      (x.fonte === 'recibo' ? 'recibo v' + x.recibo_versao + ' · ' + fmtTs(x.recibo_gerado_em) : 'prévia') + '</span>' +
+      (x.difere ? '<span class="rp-sub"><span class="tag-sit tag-s1">cálculo de agora: ' + brl(x.previa_total) + '</span> <button type="button" class="gv-btn mini" data-pv-regerar="' + x.profissional_id + '">Regerar</button></span>' : '');
+    h += '<tr><td>' + nome + '<span class="rp-reg">' + esc(x.regime_nome || '') + '</span></td>' +
+      '<td class="num">' + x.atendidos + '</td><td class="num">' + x.faltas + '</td><td>' + pct + '</td>' +
+      '<td class="num">' + val + '</td><td>' + conf + '</td>' +
+      '<td><button type="button" class="gv-btn mini" data-pv-conta="' + i + '">conta</button></td></tr>' +
+      '<tr class="rp-conta" id="rp-conta-' + i + '" style="display:none"><td colspan="7">' +
+      (previaLinhas(x).map(function(l){ return esc(l.descricao) + ': ' + esc(l.un) + ' = <b>' + l.valor + '</b>'; }).join(' · ') || 'Nenhum atendimento pago no mês.') +
+      ' · <b>total ' + brl(x.previa_total) + '</b>' + (x.fonte === 'recibo' && x.difere ? ' (o recibo emitido é de ' + brl(x.recibo_total) + ')' : '') + '</td></tr>';
+  });
+  h += '<tr class="tot"><td colspan="4">TOTAL DO MÊS</td><td class="num">' + brl(pv.total_a_receber) + '</td><td colspan="2"></td></tr></table></div>';
+  box.innerHTML = h;
+  Array.prototype.forEach.call(box.querySelectorAll('button[data-pv-conta]'), function(b){ b.onclick = function(){
+    var tr = document.getElementById('rp-conta-' + b.getAttribute('data-pv-conta')); tr.style.display = tr.style.display === 'none' ? '' : 'none'; }; });
+  Array.prototype.forEach.call(box.querySelectorAll('button[data-pv-regerar]'), function(b){ b.onclick = function(){
+    b.disabled = true;
+    rpc('rep_admin_gerar', { p_senha_admin: adm.senha, p_competencia: d.competencia, p_profissional_id: Number(b.getAttribute('data-pv-regerar')) })
+      .then(function(){ carregaRepasse(d.competencia); }).catch(function(e){ alert(humano(e)); b.disabled = false; }); }; });
+}
 function desenhaRepasse(d){
   var host = document.getElementById('gv-conteudo'); if(!host) return;
   host.innerHTML = '';
@@ -4558,9 +4606,18 @@ function desenhaRepasse(d){
       .catch(function(e){ msgEm(msg, humano(e), true); });
   };
 
+  // v2.5: quanto cada um vai receber
+  var secP = document.createElement('div'); secP.className = 'adm-sec';
+  secP.innerHTML = 'Quanto cada um vai receber — ' + esc(d.mes_nome) + ' <small id="rp-pv-tot"></small>';
+  host.appendChild(secP);
+  var boxP = document.createElement('div'); boxP.innerHTML = '<p class="gv-vazio">Calculando…</p>'; host.appendChild(boxP);
+  rpc('rep_admin_previa', { p_senha_admin: adm.senha, p_competencia: d.competencia })
+    .then(function(pv){ desenhaPreviaAdmin(pv, boxP, $('#rp-pv-tot', secP), d); })
+    .catch(function(e){ boxP.innerHTML = '<p class="gv-vazio">⚠️ ' + esc(humano(e)) + '</p>'; });
+
   // recibos do mês
   var sec = document.createElement('div'); sec.className = 'adm-sec';
-  sec.innerHTML = 'Recibos de ' + esc(d.mes_nome) + ' <small>(total ' + brl(d.total_mes) + ')</small>';
+  sec.innerHTML = 'Regime e recibo de cada profissional <small>(recibos emitidos: ' + brl(d.total_mes) + ')</small>';
   host.appendChild(sec);
   var tb = document.createElement('div'); host.appendChild(tb);
   var profs = d.profissionais || [], regs = d.regimes || [];
