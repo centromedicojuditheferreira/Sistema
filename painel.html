@@ -4311,17 +4311,48 @@ function linkAcesso(profId, forcarNovo){
     : rpc('prof_admin_convite', { p_senha_admin: adm.senha, p_profissional_id: profId }).then(function(r){ carregaAdmin(); return r; });
   pronto.then(function(r){ mostraLink(p, r); }).catch(function(e){ alert(humano(e)); });
 }
+/* mensagem do convite — v2.6: com período especial do fechamento do mês em vigor, fala do mês inteiro; senão, da rotina semanal */
+function msgConvite(primeiro, link, expira){
+  var P = (adm.dados && adm.dados.parametros) || {}, pe = P.periodo_especial || {};
+  var ate = new Date(expira).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
+  var fech = pe.fechamento ? new Date(String(pe.fechamento).replace(' ', 'T') + ':00-03:00') : null;
+  var mesInteiro = pe.alvo === 'cauda' && pe.fim && fech && !isNaN(fech) && Date.now() < fech.getTime();
+  var hora = String(P.prazo_profissional_hora || '22:00').replace(':00', 'h');
+  var passos = function(confirmar, extra2, extra4){
+    return '1️⃣ *Crie sua senha* — abra o link abaixo pelo celular e escolha uma senha. Nas próximas vezes, é só abrir o mesmo link e entrar com o seu nome e essa senha.\n\n' +
+      '2️⃣ *Confira consulta por consulta* — cada uma aparece como *Atendido* ou *Não compareceu*.' + extra2 + '\n\n' +
+      '3️⃣ *Achou algo errado?* Avise a recepção por aqui e *não confirme ainda*. A correção aparece no painel até a manhã seguinte — aí é só conferir de novo.\n\n' +
+      '4️⃣ *Tudo 100% certo?* Toque em *"' + confirmar + '"*, marque a declaração e tire uma selfie.' + extra4 + ' ✅\n\n' +
+      '⚠️ Depois de confirmado, não dá mais para alterar — por isso, só confirme quando estiver tudo certinho.\n\n';
+  };
+  var corpo;
+  if(mesInteiro){
+    var mes = mesNome(pe.fim);
+    corpo = 'Novidade boa: a partir de agora, a conferência da agenda e o seu recibo de repasse ficam no *painel da clínica*. Chega de recibo indo e voltando pelo WhatsApp.\n\n' +
+      'Nesta primeira vez, *' + mes + ' inteiro* está aberto para você conferir. É assim:\n\n' +
+      passos('Está tudo certo — confirmar o mês', ' Na mesma tela você já vê a prévia do seu repasse de ' + mes + ', com o valor e a % de agenda.',
+             ' Pronto: seu recibo de ' + mes + ' sai na hora, na tela e em PDF.') +
+      'A partir da próxima semana, a conferência passa a ser semanal, toda segunda-feira, e no fim do mês o recibo sai do mesmo jeito.\n\n';
+  } else {
+    corpo = 'A conferência da sua agenda e o seu recibo de repasse ficam no *painel da clínica*.\n\n' +
+      'Toda semana você confere a agenda da semana anterior, até segunda-feira às ' + hora + '. É assim:\n\n' +
+      passos('Está tudo certo — confirmar', '', '') +
+      'No fim do mês, ao confirmar os últimos dias, o seu recibo de repasse sai na hora, na tela e em PDF — e antes de confirmar você já vê a prévia do valor.\n\n';
+  }
+  return 'Olá, ' + primeiro + '! Tudo bem? 😊\n\n' + corpo +
+    'Qualquer dúvida, é só me chamar. 🤍\n\n' +
+    '👇 Seu link de primeiro acesso (é pessoal e vale até ' + ate + '):\n' + link;
+}
 function mostraLink(p, r){
   var link = linkDoConvite(r.token), nome = String(r.nome || p.nome_exibicao || p.nome_feegow || '').trim();
   var primeiro = nome.split(' ')[0] || ''; primeiro = primeiro.charAt(0) + primeiro.slice(1).toLowerCase();
-  var msg = 'Olá, ' + primeiro + '! Este é o seu link de acesso ao painel de conferência do Centro Médico Judithe Ferreira:\n' + link +
-            '\n\nAbra pelo celular, escolha a sua senha e confira a sua agenda. O link vale até ' + fmtTs(r.expira_em) + '. Qualquer dúvida, fale com a recepção.';
+  var msg = msgConvite(primeiro, link, r.expira_em);
   var m = modal('🔗 Link de acesso — ' + esc(nome),
     '<p style="font-size:13.5px;color:#555;margin-bottom:8px">' + (r.reaproveitado ? 'Este link já tinha sido gerado e ainda vale' : (r.criado ? 'Acesso criado e link gerado' : 'Link gerado')) +
       ' — válido até <b>' + fmtTs(r.expira_em) + '</b>. Quem abrir escolhe a própria senha; o link deixa de funcionar depois de usado.' +
       (p.senha_definida_em || (p.tem_acesso && !p.aguardando_1o_acesso && !r.criado) ? ' <b>Atenção:</b> este profissional já tem senha — ao usar o link, ela será trocada.' : '') + '</p>' +
     '<div class="fg"><label class="fl">Link</label><input type="text" class="fc" id="pf-lk-url" readonly value="' + esc(link) + '"></div>' +
-    '<div class="fg"><label class="fl">Mensagem pronta para o WhatsApp</label><textarea class="fc" id="pf-lk-msg" rows="6" style="font-family:inherit">' + esc(msg) + '</textarea></div>' +
+    '<div class="fg"><label class="fl">Mensagem pronta para o WhatsApp</label><textarea class="fc" id="pf-lk-msg" rows="14" style="font-family:inherit;font-size:13px">' + esc(msg) + '</textarea></div>' +
     '<p id="pf-lk-ok" style="display:none;color:var(--ok);font-size:13px">Copiado ✔</p>',
     '<button type="button" class="pf-btn" id="pf-lk-novo" title="Gera outro link e invalida este">Gerar novo link</button>' +
     '<button type="button" class="pf-btn" id="pf-lk-cl">Copiar só o link</button>' +
