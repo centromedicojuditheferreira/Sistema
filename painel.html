@@ -1080,7 +1080,7 @@ async function exportCSV(){
   toast(rows.length+' registros exportados!','ok');
 }
 
-document.addEventListener('DOMContentLoaded',function(){if(new URLSearchParams(location.search).has('conferir')){loModo('prof');}else{loadLoginUsers();}});
+document.addEventListener('DOMContentLoaded',function(){var q=new URLSearchParams(location.search);if(q.has('convite')){loModo('prof');PF.convite(q.get('convite'));}else if(q.has('conferir')){loModo('prof');}else{loadLoginUsers();}});
 </script>
 
 <div class="mo" id="m-edit-sec" style="display:none"><div class="mb">
@@ -3401,7 +3401,10 @@ var MSG = {
   PROFISSIONAL_NAO_EXISTE:'Este profissional não existe no Feegow.', ADMIN_JA_EXISTE:'A senha de administração já foi definida.',
   HORA_INVALIDA:'Hora inválida — use HH:MM.', DIA_INVALIDO:'Dia inválido.', PERIODO_INVERTIDO:'A data inicial é depois da final.', PERIODO_INCOMPLETO:'Preencha as duas datas.',
   AINDA_NAO_ABRIU:'A conferência deste período ainda não foi liberada.', SEM_RECIBO:'Ainda não há recibo gerado para este mês.', SEM_REGIME:'Este profissional ainda não tem regime definido.', REGIME_INVALIDO:'Regime inválido.', JA_CONFIRMADA:'Este período já foi confirmado. A próxima conferência será liberada na data indicada.',
-  SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.'
+  SEM_ACESSO:'Este profissional ainda não tem acesso — o administrador cria no ⚙️.',
+  CONVITE_INVALIDO:'Este link de acesso não é válido ou já foi usado. Se você já escolheu a sua senha, entre com o seu nome e a senha; se não, peça um novo link à recepção.',
+  CONVITE_EXPIRADO:'Este link de acesso venceu. Peça um novo link à recepção.',
+  CONVITE_USADO:'Este link já foi usado. Entre com o seu nome e a senha que você escolheu.'
 };
 var sess = { id:null, senha:null, nome:null, semanas:[], semana:null, fotoObrigatoria:true };
 var secr = { senha:null, semana:null, semanas:[] };
@@ -3469,12 +3472,8 @@ function loginLista(){
     var err = document.getElementById('lo-err'); if(err) erroEm(err, 'Sem conexão com o sistema. ' + e.message);
   });
 }
-function entrarPeloLogin(){
-  var v = document.getElementById('lo-usr').value, senha = document.getElementById('lo-pin').value;
-  var err = document.getElementById('lo-err'); err.style.display = 'none';
-  if(!v) return erroEm(err, 'Escolha seu nome.');
-  if(!senha) return erroEm(err, 'Digite a senha.');
-  return rpc('prof_entrar', { p_profissional_id: Number(v), p_senha: senha }).then(function(r){
+function entrarCom(id, senha){
+  return rpc('prof_entrar', { p_profissional_id: Number(id), p_senha: senha }).then(function(r){
     relogioOffset = new Date(r.agora).getTime() - Date.now();
     sess.id = r.profissional_id; sess.senha = senha; sess.nome = r.nome; sess.semanas = r.semanas; sess.semana = r.semana_inicio;
     sess.fotoObrigatoria = r.foto_obrigatoria !== false;
@@ -3485,9 +3484,52 @@ function entrarPeloLogin(){
     document.getElementById('pf-nome').textContent = r.nome;
     document.getElementById('lo-pin').value = '';
     return carregaSemana(sess.semana);
-  }).catch(function(e){ erroEm(err, humano(e)); });
+  });
+}
+function entrarPeloLogin(){
+  var v = document.getElementById('lo-usr').value, senha = document.getElementById('lo-pin').value;
+  var err = document.getElementById('lo-err'); err.style.display = 'none';
+  if(!v) return erroEm(err, 'Escolha seu nome.');
+  if(!senha) return erroEm(err, 'Digite a senha.');
+  return entrarCom(v, senha).catch(function(e){ erroEm(err, humano(e)); });
 }
 function sair(){ location.reload(); }
+
+/* ═══ 1º ACESSO por link (convite) — v2.2 ═══ */
+function limpaUrl(){ try{ history.replaceState(null, '', location.pathname + '?conferir=1'); }catch(e){} }
+function convite(token){
+  var m = modal('Primeiro acesso', '<p class="pf-vazio">Conferindo o link…</p>', '');
+  rpc('prof_convite_info', { p_token: token }).then(function(r){
+    m.fecha();
+    var mm = modal('Primeiro acesso — ' + esc(r.nome),
+      '<p style="font-size:15px;margin-bottom:10px">Bem-vindo(a) ao painel de conferência do Centro Médico Judithe Ferreira. Escolha uma senha — é com ela que você entra nas próximas vezes, com o seu nome.</p>' +
+      '<div class="fg"><label class="fl">Senha (pelo menos 4 caracteres)</label><input type="password" class="fc" id="pf-cv-s1" autocomplete="new-password"></div>' +
+      '<div class="fg"><label class="fl">Repita a senha</label><input type="password" class="fc" id="pf-cv-s2" autocomplete="new-password"></div>' +
+      '<div class="fg"><label class="fl">Celular com WhatsApp (DDD + número) — para os avisos da conferência' + (r.tem_telefone ? '. Já temos um número; preencha só se quiser trocar' : '') + '</label><input type="tel" class="fc" id="pf-cv-tel" inputmode="numeric" placeholder="62999990000"></div>' +
+      '<p class="pf-erro" id="pf-cv-erro" style="display:none"></p>',
+      '<button type="button" class="pf-btn pf-pri" id="pf-cv-ok">Salvar senha e entrar</button>');
+    $('[data-x]', mm.el).onclick = function(){ mm.fecha(); limpaUrl(); };
+    $('#pf-cv-ok', mm.el).onclick = function(){
+      var s1 = $('#pf-cv-s1', mm.el).value, s2 = $('#pf-cv-s2', mm.el).value, tel = $('#pf-cv-tel', mm.el).value, err = $('#pf-cv-erro', mm.el);
+      err.style.display = 'none';
+      if(s1.length < 4) return erroEm(err, 'A senha precisa ter pelo menos 4 caracteres.');
+      if(s1 !== s2) return erroEm(err, 'As senhas não conferem.');
+      var b = $('#pf-cv-ok', mm.el); b.disabled = true; b.textContent = 'Salvando…';
+      rpc('prof_convite_definir_senha', { p_token: token, p_senha: s1, p_telefone: tel || null })
+        .then(function(d){
+          limpaUrl(); mm.fecha();
+          return entrarCom(d.profissional_id, s1).catch(function(e){ alert('Senha salva. ' + humano(e) + ' Entre pela tela de entrada com o seu nome e a senha escolhida.'); });
+        })
+        .catch(function(e){ erroEm(err, humano(e)); b.disabled = false; b.textContent = 'Salvar senha e entrar'; });
+    };
+  }).catch(function(e){
+    m.fecha();
+    var me = modal('Link de acesso', '<p style="font-size:15px">' + esc(humano(e)) + '</p>',
+      '<button type="button" class="pf-btn pf-pri" data-volta>Ir para a tela de entrada</button>');
+    $('[data-volta]', me.el).onclick = function(){ me.fecha(); limpaUrl(); };
+    $('[data-x]', me.el).onclick = function(){ me.fecha(); limpaUrl(); };
+  });
+}
 
 /* ═══ faixa do prazo ═══ */
 function pintaPrazo(ids, dados, modo){
@@ -4153,15 +4195,19 @@ function desenhaAdmin(){
   var render = function(){
     var f = (adm.filtro || '').toLowerCase();
     var lista = profs.filter(function(p){ return !f || (p.nome_feegow || '').toLowerCase().indexOf(f) >= 0 || (p.nome_exibicao || '').toLowerCase().indexOf(f) >= 0; });
-    var h = '<table class="adm"><tr><th>Profissional (Feegow)</th><th>Consultas 90d</th><th>Acesso</th><th>Nome na página</th><th>Telefone</th><th>Semana da vez</th><th>Ações</th></tr>';
-    if(!lista.length) h += '<tr><td colspan="7">Ninguém com esse nome.</td></tr>';
+    var h = '<table class="adm"><tr><th>Profissional (Feegow)</th><th>Consultas 90d</th><th>Acesso</th><th>Nome na página</th><th>Telefone</th><th>1º acesso</th><th>Semana da vez</th><th>Ações</th></tr>';
+    if(!lista.length) h += '<tr><td colspan="8">Ninguém com esse nome.</td></tr>';
     lista.forEach(function(p){
       h += '<tr><td><b>' + esc(p.nome_feegow) + '</b>' + (p.situacao_feegow !== 'ativo' ? ' <span class="tag-sit tag-s1">' + esc(p.situacao_feegow) + '</span>' : '') + '</td>' +
         '<td>' + p.consultas_90d + ' <small>(' + p.unimed_90d + ' Unimed)</small></td>' +
         '<td>' + (p.tem_acesso ? (p.ativo ? '<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">sim</span>' : '<span class="tag-sit tag-s1">inativo</span>') + (p.bloqueado ? ' <span class="tag-sit tag-s0">bloqueado 15 min</span>' : '') : '<span class="tag-sit">não</span>') + '</td>' +
         '<td>' + esc(p.nome_exibicao || '—') + '</td><td>' + esc(p.telefone || '—') + '</td>' +
+        '<td style="font-size:12.5px">' + (p.senha_definida_em ? '<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">senha definida ' + fmtTs(p.senha_definida_em) + '</span>'
+          : p.convite_token ? '<span class="tag-sit tag-s1">link gerado · vale até ' + fmtTs(p.convite_expira_em) + '</span>'
+          : p.aguardando_1o_acesso ? '<span class="tag-sit tag-s0">link vencido — gere outro</span>'
+          : (p.tem_acesso ? '<small>senha criada pelo administrador</small>' : '—')) + '</td>' +
         '<td style="font-size:12.5px">' + (p.tem_acesso ? ((p.confirmou_em ? '<span class="tag-sit" style="background:var(--ok-fundo);color:var(--ok)">confirmou ' + fmtTs(p.confirmou_em) + '</span>' : '<span class="tag-sit">não confirmou</span>') + (p.teste_ate ? '<br><span class="tag-sit tag-s1">teste até ' + fmtTs(p.teste_ate) + '</span>' : '') + (p.ultimo_acesso_em ? '<br><small>último acesso ' + fmtTs(p.ultimo_acesso_em) + '</small>' : '')) : '—') + '</td>' +
-        '<td style="white-space:nowrap">' + (p.tem_acesso
+        '<td style="white-space:nowrap">' + '<button type="button" class="gv-btn verde mini" data-convite="' + p.profissional_id + '" title="Gera (ou copia) o link para o profissional escolher a própria senha">🔗 Link de acesso</button> ' + (p.tem_acesso
           ? '<button type="button" class="gv-btn mini" data-edita="' + p.profissional_id + '">Editar</button> <button type="button" class="gv-btn mini" data-remove="' + p.profissional_id + '">Remover</button>' +
             (p.teste_ate ? ' <button type="button" class="gv-btn mini" data-teste="' + p.profissional_id + '" data-min="0">Fechar teste</button>' : ' <button type="button" class="gv-btn mini" data-teste="' + p.profissional_id + '" data-min="120" title="Abre a conferência agora para este profissional, por 2 horas, ignorando o domingo">Abrir p/ teste 2h</button>') +
             (p.confirmou_em ? ' <button type="button" class="gv-btn mini" data-desfaz="' + p.profissional_id + '" title="Apaga a confirmação (e a foto) desta semana para ele poder confirmar de novo">Desfazer confirmação</button>' : '')
@@ -4169,6 +4215,7 @@ function desenhaAdmin(){
     });
     tb.innerHTML = h + '</table>';
     Array.prototype.forEach.call(tb.querySelectorAll('button[data-edita]'), function(b){ b.onclick = function(){ editaAcesso(Number(b.getAttribute('data-edita'))); }; });
+    Array.prototype.forEach.call(tb.querySelectorAll('button[data-convite]'), function(b){ b.onclick = function(){ linkAcesso(Number(b.getAttribute('data-convite'))); }; });
     Array.prototype.forEach.call(tb.querySelectorAll('button[data-remove]'), function(b){ b.onclick = function(){ removeAcesso(Number(b.getAttribute('data-remove'))); }; });
     Array.prototype.forEach.call(tb.querySelectorAll('button[data-teste]'), function(b){ b.onclick = function(){
       rpc('prof_admin_abrir_teste', { p_senha_admin: adm.senha, p_profissional_id: Number(b.getAttribute('data-teste')), p_minutos: Number(b.getAttribute('data-min')) })
@@ -4180,6 +4227,39 @@ function desenhaAdmin(){
   };
   render();
   $('#pf-adm-busca', sec).addEventListener('input', function(e){ adm.filtro = e.target.value; render(); });
+}
+/* ═══ 🔗 link de 1º acesso (convite) — v2.2 ═══ */
+function linkDoConvite(token){ return location.origin + location.pathname + '?conferir=1&convite=' + encodeURIComponent(token); }
+function linkAcesso(profId, forcarNovo){
+  var p = (adm.dados.profissionais || []).find(function(x){ return x.profissional_id === profId; }); if(!p) return;
+  var pronto = (!forcarNovo && p.convite_token)
+    ? Promise.resolve({ token: p.convite_token, expira_em: p.convite_expira_em, nome: p.nome_exibicao || p.nome_feegow, reaproveitado: true })
+    : rpc('prof_admin_convite', { p_senha_admin: adm.senha, p_profissional_id: profId }).then(function(r){ carregaAdmin(); return r; });
+  pronto.then(function(r){ mostraLink(p, r); }).catch(function(e){ alert(humano(e)); });
+}
+function mostraLink(p, r){
+  var link = linkDoConvite(r.token), nome = String(r.nome || p.nome_exibicao || p.nome_feegow || '').trim();
+  var primeiro = nome.split(' ')[0] || ''; primeiro = primeiro.charAt(0) + primeiro.slice(1).toLowerCase();
+  var msg = 'Olá, ' + primeiro + '! Este é o seu link de acesso ao painel de conferência do Centro Médico Judithe Ferreira:\n' + link +
+            '\n\nAbra pelo celular, escolha a sua senha e confira a sua agenda. O link vale até ' + fmtTs(r.expira_em) + '. Qualquer dúvida, fale com a recepção.';
+  var m = modal('🔗 Link de acesso — ' + esc(nome),
+    '<p style="font-size:13.5px;color:#555;margin-bottom:8px">' + (r.reaproveitado ? 'Este link já tinha sido gerado e ainda vale' : (r.criado ? 'Acesso criado e link gerado' : 'Link gerado')) +
+      ' — válido até <b>' + fmtTs(r.expira_em) + '</b>. Quem abrir escolhe a própria senha; o link deixa de funcionar depois de usado.' +
+      (p.senha_definida_em || (p.tem_acesso && !p.aguardando_1o_acesso && !r.criado) ? ' <b>Atenção:</b> este profissional já tem senha — ao usar o link, ela será trocada.' : '') + '</p>' +
+    '<div class="fg"><label class="fl">Link</label><input type="text" class="fc" id="pf-lk-url" readonly value="' + esc(link) + '"></div>' +
+    '<div class="fg"><label class="fl">Mensagem pronta para o WhatsApp</label><textarea class="fc" id="pf-lk-msg" rows="6" style="font-family:inherit">' + esc(msg) + '</textarea></div>' +
+    '<p id="pf-lk-ok" style="display:none;color:var(--ok);font-size:13px">Copiado ✔</p>',
+    '<button type="button" class="pf-btn" id="pf-lk-novo" title="Gera outro link e invalida este">Gerar novo link</button>' +
+    '<button type="button" class="pf-btn" id="pf-lk-cl">Copiar só o link</button>' +
+    '<button type="button" class="pf-btn pf-pri" id="pf-lk-cm">Copiar mensagem</button>');
+  var copia = function(texto, el){
+    var feito = function(){ var ok = $('#pf-lk-ok', m.el); ok.style.display = 'block'; setTimeout(function(){ ok.style.display = 'none'; }, 2000); };
+    var manual = function(){ el.focus(); el.select(); try{ document.execCommand('copy'); feito(); }catch(e){ alert('Selecione o texto e copie (Ctrl+C).'); } };
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(feito).catch(manual); else manual();
+  };
+  $('#pf-lk-cl', m.el).onclick = function(){ copia(link, $('#pf-lk-url', m.el)); };
+  $('#pf-lk-cm', m.el).onclick = function(){ copia($('#pf-lk-msg', m.el).value, $('#pf-lk-msg', m.el)); };
+  $('#pf-lk-novo', m.el).onclick = function(){ if(!confirm('Gerar um novo link? O anterior deixa de funcionar.')) return; m.fecha(); linkAcesso(p.profissional_id, true); };
 }
 function editaAcesso(profId){
   var p = (adm.dados.profissionais || []).find(function(x){ return x.profissional_id === profId; }); if(!p) return;
@@ -4468,7 +4548,7 @@ function desenhaRepasse(d){
   }; });
 }
 
-return { loginLista: loginLista, entrarPeloLogin: entrarPeloLogin, sair: sair, secretaria: secretaria, admin: admin };
+return { loginLista: loginLista, entrarPeloLogin: entrarPeloLogin, sair: sair, secretaria: secretaria, admin: admin, convite: convite };
 })();
 </script>
 </body>
