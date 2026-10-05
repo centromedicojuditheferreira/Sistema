@@ -3498,7 +3498,7 @@ function sair(){ location.reload(); }
 /* ═══ 1º ACESSO por link (convite) — v2.2 ═══ */
 function limpaUrl(){ try{ history.replaceState(null, '', location.pathname + '?conferir=1'); }catch(e){} }
 function convite(token){
-  var m = modal('Primeiro acesso', '<p class="pf-vazio">Conferindo o link…</p>', '');
+  var m = modal('Primeiro acesso', '<p class="pf-vazio">Conferindo o link…</p>', ''); m.el.style.zIndex = '10000';   /* acima da tela de login */
   rpc('prof_convite_info', { p_token: token }).then(function(r){
     m.fecha();
     var mm = modal('Primeiro acesso — ' + esc(r.nome),
@@ -3508,6 +3508,7 @@ function convite(token){
       '<div class="fg"><label class="fl">Celular com WhatsApp (DDD + número) — para os avisos da conferência' + (r.tem_telefone ? '. Já temos um número; preencha só se quiser trocar' : '') + '</label><input type="tel" class="fc" id="pf-cv-tel" inputmode="numeric" placeholder="62999990000"></div>' +
       '<p class="pf-erro" id="pf-cv-erro" style="display:none"></p>',
       '<button type="button" class="pf-btn pf-pri" id="pf-cv-ok">Salvar senha e entrar</button>');
+    mm.el.style.zIndex = '10000';
     $('[data-x]', mm.el).onclick = function(){ mm.fecha(); limpaUrl(); };
     $('#pf-cv-ok', mm.el).onclick = function(){
       var s1 = $('#pf-cv-s1', mm.el).value, s2 = $('#pf-cv-s2', mm.el).value, tel = $('#pf-cv-tel', mm.el).value, err = $('#pf-cv-erro', mm.el);
@@ -3526,6 +3527,7 @@ function convite(token){
     m.fecha();
     var me = modal('Link de acesso', '<p style="font-size:15px">' + esc(humano(e)) + '</p>',
       '<button type="button" class="pf-btn pf-pri" data-volta>Ir para a tela de entrada</button>');
+    me.el.style.zIndex = '10000';
     $('[data-volta]', me.el).onclick = function(){ me.fecha(); limpaUrl(); };
     $('[data-x]', me.el).onclick = function(){ me.fecha(); limpaUrl(); };
   });
