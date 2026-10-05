@@ -154,6 +154,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
     <div class="pf-aviso"><p>Carregando&hellip;</p><span id="pf-hora-prazo" style="display:none">22h</span></div>
     <nav class="pf-semanas" id="pf-semanas" aria-label="Semanas"></nav>
     <div class="pf-resumo" id="pf-resumo"></div>
+    <div id="pf-previa"></div>
     <div id="pf-lista"></div>
   </main>
   <footer class="pf-rodape"><div class="pf-rodape-in">
@@ -3276,6 +3277,18 @@ return { boot: boot, startTimers: startTimers, stopTimers: stopTimers, recarrega
 #prof-view .pf-main{max-width:720px;margin:0 auto;padding:0 16px 140px}
 #prof-view .pf-aviso{margin:16px 0 4px;padding:0;background:none;border:0;font-size:17px;line-height:1.55}
 #prof-view .pf-aviso p{margin:0 0 8px}
+.pf-regra{background:#FFF6E5;border-left:4px solid #B7791F;border-radius:6px;padding:10px 12px;margin:12px 0}
+.pf-regra p:last-child{margin-bottom:0}
+.pf-declara{display:flex;gap:10px;align-items:flex-start;font-size:16px;line-height:1.4;margin:0 0 12px;padding:10px;background:#F3F6F4;border-radius:8px;cursor:pointer}
+.pf-declara input{width:22px;height:22px;margin:2px 0 0;flex:none}
+.pf-previa{border:1px solid #cfd8d4;border-radius:10px;padding:12px 14px;margin:8px 0 14px;background:#fff}
+.pf-previa-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.pf-previa-h b{font-size:16px;color:#0F6B5C}.pf-previa-h span{font-size:12.5px;color:#777}
+.pf-previa-tot{font-size:30px;font-weight:700;color:#111;margin:6px 0 0;letter-spacing:-.5px}
+.pf-previa-sub{font-size:14.5px;color:#444;margin:0 0 8px}
+.pf-previa-t{width:100%;border-collapse:collapse;font-size:14px}.pf-previa-t td{padding:5px 0;border-top:1px solid #eee;vertical-align:top}
+.pf-previa-t td.num{text-align:right;white-space:nowrap}.pf-previa-t td.un{color:#777;font-size:12.5px;white-space:nowrap;padding-left:8px}
+.pf-previa-nota{font-size:12.5px;color:#777;margin:8px 0 0}
 #prof-view .pf-semanas{display:none}
 #prof-view .pf-resumo{color:#666;font-size:15px;margin:14px 0 0}
 #prof-view .pf-dia{margin-top:18px}
@@ -3410,7 +3423,7 @@ var sess = { id:null, senha:null, nome:null, semanas:[], semana:null, fotoObriga
 var secr = { senha:null, semana:null, semanas:[] };
 var adm  = { senha:null, dados:null, filtro:'' };
 function painelAdmin(){ return (typeof CU !== 'undefined' && CU && CU.admin === true); }
-var semanaAtual = null, relogioOffset = 0, contadorTimer = null;
+var semanaAtual = null, relogioOffset = 0, contadorTimer = null, previaAtual = null;
 
 function $(s, el){ return (el || document).querySelector(s); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -3418,6 +3431,7 @@ function humano(e){ return MSG[e.message] || ('Não deu certo: ' + e.message); }
 function dLocal(s){ var p = s.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
 function ddmm(s){ var d = dLocal(s); return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); }
 function hhmm(t){ return (t || '').slice(0,5); }
+function mesNome(s){ return ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'][dLocal(s).getMonth()]; }
 function fmtTs(iso){ return iso ? new Date(iso).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''; }
 function fmtDiaHora(iso){
   var d = new Date(iso);
@@ -3557,6 +3571,7 @@ function pintaPrazo(ids, dados, modo){
         return;
       }
       if(agora() > fech.getTime() || dados.motivo === 'fechada'){ box.classList.add('fechada'); conta.textContent = 'Período encerrado'; ate.textContent = 'A agenda seguiu para o faturamento com as informações registradas.' + (dados.proxima_abertura ? ' A próxima conferência será liberada ' + fmtDiaHora(dados.proxima_abertura) + '.' : ''); return; }
+      if(dados.periodo_especial){ conta.textContent = 'Aguardando a sua conferência'; ate.textContent = 'Confira com calma, consulta por consulta. Só confirme quando tudo estiver certo.'; return; }
       if(ms <= 0){ box.classList.add('passou'); conta.textContent = 'Prazo encerrado'; ate.textContent = 'O prazo era ' + fmtDiaHora(dados.prazo) + '. Se ainda houver alguma correção, informe a recepção imediatamente.'; return; }
     } else if(ms <= 0){
       box.classList.add('fechada'); conta.textContent = 'Semana fechada';
@@ -3591,8 +3606,9 @@ function carregaSemana(inicio){
     semanaAtual = d; sess.semana = d.semana_inicio;
     pintaPrazo({ prazo:'pf-prazo', semana:'pf-semana', conta:'pf-conta', ate:'pf-ate' }, d, 'prof');
     document.getElementById('pf-semanas').innerHTML = '';
+    previaAtual = null; var pv = document.getElementById('pf-previa'); if(pv) pv.innerHTML = '';
     if(d.aberta === false){ renderFechada(d); return; }
-    renderItens(d); renderRodape(d);
+    renderItens(d); renderRodape(d); carregaPrevia(d);
   }).catch(function(e){ lista.innerHTML = '<p class="pf-erro">' + esc(humano(e)) + '</p>'; });
 }
 function classeStatus(it){
@@ -3610,12 +3626,40 @@ function presencaHtml(d){
          '<br><small>' + p.atendidos + ' atendido' + (p.atendidos === 1 ? '' : 's') + ' · ' + p.faltas + ' falta' + (p.faltas === 1 ? '' : 's') + (p.so_unimed ? ' · somente Unimed' : '') + '</small></div>';
 }
 var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+/* ═══ prévia do repasse (valor + %) — v2.3: só no período que fecha o mês, para quem gera recibo ═══ */
+function carregaPrevia(d){
+  var box = document.getElementById('pf-previa'); if(!box) return;
+  if(d.tipo_periodo !== 'fechamento_mes' || !d.regime || !d.regime.gera_recibo) return;
+  rpc('prof_recibo_previa', { p_profissional_id: sess.id, p_senha: sess.senha, p_competencia: d.periodo_fim })
+    .then(function(r){
+      previaAtual = r; box.innerHTML = previaHtml(r);
+      var b = document.getElementById('pf-baixar'); if(b) b.textContent = 'Baixar prévia em PDF — agenda e repasse (sem valor de confirmação)';
+    })
+    .catch(function(){ previaAtual = null; box.innerHTML = ''; });
+}
+function previaLinhas(r){
+  return (r.resumo || []).map(function(x){
+    var un = (x.quantidade > 0 && x.descricao !== 'Particular' && !/R\$/.test(x.descricao)) ? (x.quantidade + ' × ' + brl(x.valor / x.quantidade)) : (x.quantidade + (x.descricao === 'Particular' ? ' (60% do valor cobrado)' : ''));
+    return { descricao: x.descricao, un: un, valor: brl(x.valor) };
+  });
+}
+function previaHtml(r){
+  var h = '<div class="pf-previa"><div class="pf-previa-h"><b>Prévia do repasse — ' + esc(r.mes_nome) + '</b><span>muda conforme as correções · ainda não é o recibo</span></div>' +
+    '<div class="pf-previa-tot">' + brl(r.total) + '</div>' +
+    '<div class="pf-previa-sub">' + r.atendidos + ' atendimento' + (r.atendidos === 1 ? '' : 's') + ' · ' + r.faltas + ' falta' + (r.faltas === 1 ? '' : 's') +
+      (r.mostra_pct ? ' · <b>' + esc(r.pct_texto) + ' de agenda</b>' : '') + '</div>' +
+    '<table class="pf-previa-t">';
+  previaLinhas(r).forEach(function(l){ h += '<tr><td>' + esc(l.descricao) + '</td><td class="un">' + esc(l.un) + '</td><td class="num"><b>' + l.valor + '</b></td></tr>'; });
+  if(!(r.resumo || []).length) h += '<tr><td colspan="3">Nenhum atendimento pago neste mês até agora.</td></tr>';
+  h += '</table><p class="pf-previa-nota">Atendido = sessão realizada. Falta = cancelamento, não comparecimento ou agendamento não realizado. O recibo definitivo é gerado quando você confirma o mês.</p></div>';
+  return h;
+}
 function renderItens(d){
   var itens = d.itens || [];
   var lista = document.getElementById('pf-lista');
   document.getElementById('pf-resumo').innerHTML = itens.length ? (itens.length + ' consulta' + (itens.length === 1 ? '' : 's')) : '';
   if(!itens.length){ lista.innerHTML = '<p class="pf-vazio">Nenhuma consulta sua nesta semana.</p>'; return; }
-  lista.innerHTML = linhasHtml(itens) + '<button type="button" class="pf-btn pf-baixar" id="pf-baixar">Baixar prévia em PDF (sem valor de confirmação)</button>';
+  lista.innerHTML = linhasHtml(itens) + '<button type="button" class="pf-btn pf-baixar" id="pf-baixar">' + (previaAtual ? 'Baixar prévia em PDF — agenda e repasse (sem valor de confirmação)' : 'Baixar prévia em PDF (sem valor de confirmação)') + '</button>';
   document.getElementById('pf-baixar').onclick = function(){ baixarRelatorio(d); };
 }
 function linhasHtml(itens){
@@ -3684,20 +3728,22 @@ function renderFechada(d){
 }
 function renderRodape(d){
   var aviso = document.querySelector('#prof-view .pf-aviso');
+  var fechaMes = (d.tipo_periodo === 'fechamento_mes');
+  var qual = (fechaMes && d.periodo_especial) ? ('de ' + mesNome(d.periodo_fim)) : (fechaMes ? 'dos últimos dias do mês' : 'da semana');
   if(aviso) aviso.innerHTML =
-    (d.tipo_periodo === 'fechamento_mes'
-      ? '<p>Estes são os últimos dias do mês. Ao confirmá-los, a conferência do mês fica concluída e o seu recibo de repasse é gerado na hora.</p>'
-      : '<p>Esta é a sua agenda do período, conforme registrada no sistema da clínica. É a partir dela que os atendimentos são faturados e que o seu repasse é calculado — por isso pedimos a sua conferência.</p>') +
-    '<p>Se alguma consulta estiver com a situação incorreta, informe a recepção pelo WhatsApp. A correção é feita no Feegow e reflete aqui em até 30 minutos.</p>' +
-    '<p>Quando todas as informações estiverem corretas, confirme a agenda. O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>; após esse horário, o período segue para o faturamento com as informações registradas.</p>' +
+    '<p>Esta é a sua agenda ' + qual + ', como está registrada no sistema da clínica. É por ela que os atendimentos são faturados e que o seu repasse é calculado.</p>' +
+    '<div class="pf-regra"><p><b>Antes de confirmar, confira consulta por consulta.</b></p>' +
+    '<p>Encontrou algo errado — situação, horário, paciente ou convênio? <b>Avise a recepção pelo WhatsApp e não confirme ainda.</b> A correção é feita no Feegow e aparece aqui até a manhã seguinte. Volte, confira de novo e só então confirme.</p></div>' +
+    '<p>Ao confirmar, você declara que a agenda está correta' + (fechaMes ? '. A conferência do mês é encerrada e o seu recibo de repasse é gerado na hora.' : ' e ela segue para o faturamento.') + ' Depois de confirmada, a agenda não pode mais ser alterada por aqui.</p>' +
+    (d.periodo_especial ? '' : '<p>O prazo é <b>segunda-feira às ' + esc(sess.horaPrazo || '22h') + '</b>; após esse horário, o período segue para o faturamento com as informações registradas.</p>') +
     (ehCelular() ? '' : '<p>A confirmação é feita pelo celular, com registro fotográfico.</p>');
   document.getElementById('pf-confirmar').style.display = '';
   var btn = document.getElementById('pf-confirmar'), ok = document.getElementById('pf-confirmada'), nota = document.getElementById('pf-nota');
   var abertos = (d.itens || []).filter(pedidoAberto).length;
-  ok.style.display = 'none'; btn.textContent = d.tipo_periodo === 'fechamento_mes' ? 'Confirmar e concluir o mês' : 'Confirmar agenda';
-  nota.textContent = d.fechada ? 'O período encerrou. A confirmação será registrada como posterior ao prazo.'
-    : d.prazo_passou ? 'O prazo encerrou. A confirmação será registrada como posterior ao prazo.'
-    : (ehCelular() ? 'A confirmação inclui um registro fotográfico.' : 'A confirmação é feita pelo celular.');
+  ok.style.display = 'none'; btn.textContent = fechaMes ? 'Está tudo certo — confirmar o mês' : 'Está tudo certo — confirmar a semana';
+  nota.textContent = (d.fechada && !d.periodo_especial) ? 'O período encerrou. A confirmação será registrada como posterior ao prazo.'
+    : (d.prazo_passou && !d.periodo_especial) ? 'O prazo encerrou. A confirmação será registrada como posterior ao prazo.'
+    : ('Só confirme se não houver nenhuma correção pendente na recepção. ' + (ehCelular() ? 'A confirmação inclui um registro fotográfico.' : 'A confirmação é feita pelo celular.'));
   btn.onclick = function(){ abreConfirmacao(d); };
 }
 
@@ -3711,13 +3757,16 @@ function abreConfirmacao(d){
     $('[data-volta]', mm.el).onclick = mm.fecha;
     return;
   }
-  var m = modal('Confirmar a agenda do período',
+  var m = modal('Confirmar a agenda',
+    '<label class="pf-declara"><input type="checkbox" id="pf-cf-declaro"><span>Conferi consulta por consulta. Está tudo certo e <b>não há nenhuma correção pendente</b> na recepção.</span></label>' +
     '<p style="font-size:16px;margin-bottom:10px">' + (sess.fotoObrigatoria ? 'Para registrar a confirmação, tire uma foto sua agora. Ela fica anexada ao comprovante.' : 'Se desejar, registre uma foto.') + '</p>' +
     '<div class="pf-foto"><input type="file" id="pf-file" accept="image/*" capture="' + FOTO_CAMERA + '" style="display:none"><button type="button" class="pf-btn" id="pf-tirar">Tirar a foto</button>' +
       '<img id="pf-prev" style="display:none" alt="sua foto"><p id="pf-info" style="display:none;font-size:13px;color:#666"></p></div>' +
     '<p class="pf-erro" id="pf-cf-erro" style="display:none"></p>',
     '<button type="button" class="pf-btn" data-volta>Voltar</button><button type="button" class="pf-btn pf-pri" id="pf-cf-ok"' + (sess.fotoObrigatoria ? ' disabled' : '') + '>Registrar confirmação</button>');
   var el = m.el, foto = null;
+  var liberar = function(){ $('#pf-cf-ok', el).disabled = (sess.fotoObrigatoria && !foto) || !$('#pf-cf-declaro', el).checked; };
+  $('#pf-cf-declaro', el).onchange = liberar; liberar();
   $('[data-volta]', el).onclick = m.fecha;
   $('#pf-tirar', el).onclick = function(){ $('#pf-file', el).click(); };
   $('#pf-file', el).onchange = function(ev){
@@ -3727,13 +3776,15 @@ function abreConfirmacao(d){
       foto = res;
       $('#pf-prev', el).src = res.dataUrl; $('#pf-prev', el).style.display = 'block';
       $('#pf-info', el).textContent = Math.round(res.bytes/1024) + ' KB'; $('#pf-info', el).style.display = 'block';
-      $('#pf-tirar', el).textContent = 'Tirar outra foto'; $('#pf-cf-ok', el).disabled = false;
+      $('#pf-tirar', el).textContent = 'Tirar outra foto'; liberar();
     }).catch(function(e){ erroEm($('#pf-cf-erro', el), 'Não foi possível preparar a foto: ' + e.message); });
   };
   $('#pf-cf-ok', el).onclick = function(){
+    if(!$('#pf-cf-declaro', el).checked) return erroEm($('#pf-cf-erro', el), 'Marque a declaração de que a agenda está correta.');
     if(sess.fotoObrigatoria && !foto) return erroEm($('#pf-cf-erro', el), MSG.FOTO_OBRIGATORIA);
     var b = $('#pf-cf-ok', el); b.disabled = true; b.textContent = 'Registrando…';
-    rpc('prof_confirmar_semana', { p_profissional_id: sess.id, p_senha: sess.senha, p_semana_inicio: d.semana_inicio, p_observacao: null,
+    rpc('prof_confirmar_semana', { p_profissional_id: sess.id, p_senha: sess.senha, p_semana_inicio: d.semana_inicio,
+                                   p_observacao: 'Declarou: conferiu consulta por consulta; nenhuma correção pendente na recepção.',
                                    p_foto_base64: foto ? foto.dataUrl : null, p_foto_mime: foto ? 'image/jpeg' : null })
       .then(function(){ m.fecha(); return carregaSemana(d.semana_inicio); })
       .catch(function(e){ erroEm($('#pf-cf-erro', el), humano(e)); b.disabled = false; b.textContent = 'Registrar confirmação'; });
@@ -3849,6 +3900,22 @@ function baixarRelatorio(d){
                      : ' · confirmada em ' + fmtTs(d.confirmada_em) + (d.confirmada_com_foto ? ' (com registro fotográfico)' : '')), L, y); y += 4;
     doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 6;
     marcaDagua();
+    if(previa && previaAtual && previaAtual.previa){
+      var r = previaAtual;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 107, 92);
+      doc.text('Prévia do repasse — ' + r.mes_nome + ' · ' + brl(r.total), L, y); y += 5.5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(60);
+      doc.text(r.atendidos + ' atendimentos · ' + r.faltas + ' faltas' + (r.mostra_pct ? ' · ' + r.pct_texto + ' de agenda' : '') + ' · calculado em ' + fmtTs(r.calculado_em) + ' — muda conforme as correções; não é o recibo', L, y); y += 5;
+      doc.setTextColor(0); doc.setFontSize(10);
+      previaLinhas(r).forEach(function(l){
+        doc.text(doc.splitTextToSize(l.descricao, 96)[0], L, y);
+        doc.text(l.un, L + 100, y);
+        doc.text(l.valor, L + W, y, { align: 'right' }); y += 5;
+      });
+      doc.setFont('helvetica', 'bold'); doc.text('TOTAL (prévia)', L, y); doc.text(brl(r.total), L + W, y, { align: 'right' }); y += 3;
+      doc.setDrawColor(0); doc.line(L, y, L + W, y); y += 7;
+      doc.setFont('helvetica', 'normal');
+    }
     var porDia = {}, ordem = [];
     itens.forEach(function(i){ if(!porDia[i.data]){ porDia[i.data] = []; ordem.push(i.data); } porDia[i.data].push(i); });
     if(!itens.length){ doc.text('Nenhuma consulta na semana.', L, y); }
@@ -3873,7 +3940,7 @@ function baixarRelatorio(d){
     doc.text((previa ? 'PRÉVIA — sem valor de confirmação. ' : '') + 'Emitido em ' + fmtTs(new Date().toISOString()) + ' pelo sistema de conferência de agenda do Centro Médico Judithe Ferreira.', L, alt - 10);
     doc.save((previa ? 'previa_' : 'conferencia_') + (d.nome || 'profissional').replace(/[^a-z0-9]+/gi, '_') + '_' + d.semana_inicio + '.pdf');
   }).catch(function(e){ alert('Não deu para gerar o PDF: ' + e.message); })
-    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = d.confirmada_em ? 'Baixar comprovante da conferência (PDF)' : 'Baixar prévia em PDF (sem valor de confirmação)'; } });
+    .then(function(){ if(btn){ btn.disabled = false; btn.textContent = d.confirmada_em ? 'Baixar comprovante da conferência (PDF)' : (previaAtual ? 'Baixar prévia em PDF — agenda e repasse (sem valor de confirmação)' : 'Baixar prévia em PDF (sem valor de confirmação)'); } });
 }
 function comprimeFoto(file){
   return new Promise(function(resolve, reject){
