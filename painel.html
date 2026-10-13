@@ -109,7 +109,25 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
 .carrinho-item{animation:fadeIn .15s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+/* ── Balanço de Estoque ── */
+.bal-ajuda{background:var(--blul);border:1px solid #bfdbfe;border-radius:var(--r);padding:12px 16px;font-size:14px;color:var(--grn);margin-bottom:14px;line-height:1.6}
+.bal-topo{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bal-tb td{vertical-align:middle;font-size:14px}
+.bal-tb td input.fc{padding:7px 9px;font-size:15px;width:96px;font-family:var(--mo);text-align:right}
+.bal-tb td.bal-mud{background:var(--ambl)}
+.bal-tb td.bal-mud input.fc{border-color:var(--amb);font-weight:700}
+.bal-dif{display:block;font-size:11px;font-family:var(--mo);margin-top:3px;text-align:right}
+.bal-tb tr.bal-exc td{background:var(--redl)}
+.bal-tb tr.bal-exc .bal-nm{text-decoration:line-through;color:var(--muted)}
+.bal-tb label.bal-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--red)}
+.bal-tb label.bal-chk input{width:18px;height:18px;cursor:pointer}
+.bal-rep{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:20px;background:var(--ambl);color:var(--amb);font-size:11px;font-weight:700}
+.bal-bar{position:sticky;bottom:0;z-index:20;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;box-shadow:0 -2px 14px rgba(0,0,0,.08)}
+.bal-bar .bal-n{font-size:14px;font-weight:600}
+.bal-bar .bal-n b{font-family:var(--mo);font-size:18px}
+.btn:disabled{opacity:.45;cursor:default}
 @media(max-width:768px){
+  .bal-bar{bottom:56px}
   :root{--sw:0px}
   .sb{bottom:0;top:auto;width:100%;height:56px;flex-direction:row;overflow:hidden}
   .sb-hd,.sb-usr,.sb-ft,.ns-lbl{display:none}
@@ -189,6 +207,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
     <button class="ni active" id="nav-dashboard" onclick="nav('dashboard')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Dashboard</button>
     <button class="ni" onclick="nav('venda')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>Nova Venda</button>
     <button class="ni" onclick="nav('estoque')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>Entrada Estoque</button>
+    <button class="ni" id="nav-balanco" onclick="nav('balanco')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>Balanço de Estoque</button>
     <button class="ni" onclick="nav('notinhas')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>Notinhas</button>
     <button class="ni" onclick="nav('caixa')"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>Caixa</button>
     <div class="ns-lbl">Cadastros</div>
@@ -284,6 +303,21 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
   </div>
 </div>
 
+<!-- BALANCO DE ESTOQUE -->
+<div class="sec" id="s-balanco">
+  <div class="sh"><h2>Balanço de Estoque</h2></div>
+  <div class="bal-ajuda"><b>Como fazer:</b> na coluna <b>Contado</b>, digite quantos tem na prateleira. Para mudar o preço, digite na coluna <b>Preço</b>. Produto que não vende mais: marque <b>Excluir</b>. No final, clique em <b>Salvar balanço</b>.</div>
+  <div class="bal-topo">
+    <div class="itabs" style="margin:0;border:none"><button class="itab active" onclick="filtroBal('todos',this)">Todos</button><button class="itab" onclick="filtroBal('conveniencia',this)">Conveniência</button><button class="itab" onclick="filtroBal('livraria',this)">Livraria</button><button class="itab" onclick="filtroBal('excluidos',this)">Excluídos</button></div>
+    <input type="search" class="fc" id="bal-busca" placeholder="Buscar produto..." style="width:220px;margin-left:auto" oninput="buscaBal(this.value)">
+  </div>
+  <div class="tw"><table class="bal-tb"><thead><tr id="bal-head"><th>Produto</th><th>No sistema</th><th>Contado</th><th>Preço (R$)</th><th>Excluir</th></tr></thead><tbody id="bal-tb"></tbody></table></div>
+  <div class="bal-bar" id="bal-bar">
+    <span class="bal-n" id="bal-n">Nenhuma alteração ainda</span>
+    <div style="display:flex;gap:8px"><button class="btn btn-s" onclick="loadBalanco()">Desfazer</button><button class="btn btn-p" id="bal-salvar" onclick="salvarBalanco()" disabled>Salvar balanço</button></div>
+  </div>
+</div>
+
 <!-- NOTINHAS -->
 <div class="sec" id="s-notinhas">
   <div class="sh"><h2>Notinhas dos Profissionais</h2><div style="display:flex;gap:8px"><button class="btn btn-s btn-sm" onclick="abrirRel()">Relatorio Semanal</button><button class="btn btn-a btn-sm" onclick="abrirBonif()">Bonificacao Mensal</button></div></div>
@@ -325,7 +359,7 @@ tr.err-row td:not(:last-child){opacity:.4;text-decoration:line-through}
   <div class="sh"><h2>Historico de Lancamentos</h2></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
     <input type="date" class="fc" id="h-ini" style="width:148px"><span style="color:var(--muted)">ate</span><input type="date" class="fc" id="h-fim" style="width:148px">
-    <select class="fc" id="h-tipo" style="width:200px"><option value="">Todos os tipos</option><option value="venda_paciente">Venda - Paciente</option><option value="venda_profissional">Venda - Notinha</option><option value="entrada_estoque">Entrada de Estoque</option><option value="pagamento_notinha">Pagamento Notinha</option><option value="bonificacao">Bonificacao</option><option value="pagamento_notinha">Pagamento Notinha</option><option value="edicao_profissional">Edicao de Profissional</option><option value="sangria">Sangria</option><option value="suprimento">Suprimento</option></select>
+    <select class="fc" id="h-tipo" style="width:200px"><option value="">Todos os tipos</option><option value="venda_paciente">Venda - Paciente</option><option value="venda_profissional">Venda - Notinha</option><option value="entrada_estoque">Entrada de Estoque</option><option value="pagamento_notinha">Pagamento Notinha</option><option value="bonificacao">Bonificacao</option><option value="ajuste_estoque">Balanço de Estoque</option><option value="edicao_produto">Edição de Produto</option><option value="edicao_profissional">Edicao de Profissional</option><option value="sangria">Sangria</option><option value="suprimento">Suprimento</option></select>
     <button class="btn btn-s btn-sm" onclick="loadHistorico()">Filtrar</button>
   </div>
   <div class="tw"><table><thead><tr><th>Data/Hora</th><th>Tipo</th><th>Produto/Desc.</th><th>Cliente</th><th>Pagto</th><th>Valor</th><th>Secretaria</th><th>Situacao</th></tr></thead><tbody id="h-tb"></tbody></table></div>
@@ -435,7 +469,7 @@ async function hashPIN(p){const e=new TextEncoder().encode(p);const b=await cryp
 const closeM=id=>document.getElementById(id).style.display='none';
 const openM=id=>document.getElementById(id).style.display='flex';
 function toast(msg,tp=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(tp?' '+tp:'');setTimeout(()=>t.classList.remove('show'),3200);}
-function tipoBadge(t){const m={venda_paciente:'<span class="bg bg-g">Venda Pac.</span>',venda_profissional:'<span class="bg bg-b">Notinha</span>',entrada_estoque:'<span class="bg bg-p">Estoque</span>',pagamento_notinha:'<span class="bg bg-g">Pagamento</span>',bonificacao:'<span class="bg bg-a">Bonificacao</span>',sangria:'<span class="bg bg-r">Sangria</span>',suprimento:'<span class="bg bg-g">Suprimento</span>',edicao_profissional:'<span class="bg bg-x">Edicao</span>'};return m[t]||('<span class="bg bg-x">'+t+'</span>');}
+function tipoBadge(t){const m={venda_paciente:'<span class="bg bg-g">Venda Pac.</span>',venda_profissional:'<span class="bg bg-b">Notinha</span>',entrada_estoque:'<span class="bg bg-p">Estoque</span>',pagamento_notinha:'<span class="bg bg-g">Pagamento</span>',bonificacao:'<span class="bg bg-a">Bonificacao</span>',sangria:'<span class="bg bg-r">Sangria</span>',suprimento:'<span class="bg bg-g">Suprimento</span>',edicao_profissional:'<span class="bg bg-x">Edicao</span>',ajuste_estoque:'<span class="bg bg-a">Balanço</span>',edicao_produto:'<span class="bg bg-x">Produto</span>'};return m[t]||('<span class="bg bg-x">'+t+'</span>');}
 function pagBadge(p){if(!p)return'<span style="color:var(--muted)">-</span>';const m={dinheiro:'Dinheiro',pix:'PIX',debito:'Debito',credito:'Credito',notinha:'Notinha'};return m[p]||p;}
 
 function gerarLink(profId){
@@ -461,6 +495,119 @@ async function loadPosicao(){
   });
 }
 function filtroPos(f,el){PFILTRO_POS=f;document.querySelectorAll('.itab').forEach(x=>x.classList.remove('active'));el.classList.add('active');loadPosicao();}
+
+/* ═══ BALANCO DE ESTOQUE (contagem, preco e exclusao em uma tela so) ═══ */
+let BAL=[],BAL_FILTRO='todos',BAL_BUSCA='';
+const balEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const balNum=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isNaN(n)?null:n;};
+function balMudou(r){
+  if(!r.ativo)return false;
+  return r.excluir||(r.contado!==null&&r.contado!==r.estoque)||(r.precoNovo!==null&&r.precoNovo!==r.preco);
+}
+async function loadBalanco(){
+  const tb=document.getElementById('bal-tb');tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Carregando...</td></tr>';
+  const snap=await db.collection('produtos').get();
+  BAL=snap.docs.map(d=>{const p=d.data();return{id:d.id,nome:p.nome||'',grupo:p.grupo||'',unidade:p.unidade||'un',estoque:Number(p.estoque_atual)||0,preco:Number(p.preco_venda)||0,ativo:p.ativo!==false,contado:null,precoNovo:null,excluir:false};})
+    .sort((a,b)=>a.nome.localeCompare(b.nome));
+  const cont={};BAL.forEach(r=>{if(r.ativo){const k=r.nome.trim().toLowerCase();cont[k]=(cont[k]||0)+1;}});
+  BAL.forEach(r=>{r.repetido=r.ativo&&cont[r.nome.trim().toLowerCase()]>1;});
+  document.getElementById('bal-busca').value=BAL_BUSCA;
+  renderBalanco();
+}
+function filtroBal(f,el){BAL_FILTRO=f;document.querySelectorAll('#s-balanco .itab').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderBalanco();}
+function buscaBal(v){BAL_BUSCA=(v||'').trim().toLowerCase();renderBalanco();}
+function balVisivel(r){
+  if(BAL_FILTRO==='excluidos'){if(r.ativo)return false;}
+  else{if(!r.ativo)return false;if(BAL_FILTRO!=='todos'&&r.grupo!==BAL_FILTRO)return false;}
+  return !BAL_BUSCA||r.nome.toLowerCase().includes(BAL_BUSCA);
+}
+function renderBalanco(){
+  const tb=document.getElementById('bal-tb');tb.innerHTML='';
+  const head=document.getElementById('bal-head');const exc=BAL_FILTRO==='excluidos';
+  head.innerHTML=exc?'<th>Produto</th><th>Grupo</th><th>Estava com</th><th>Preço</th><th></th>':'<th>Produto</th><th>No sistema</th><th>Contado</th><th>Preço (R$)</th><th>Excluir</th>';
+  const abas=document.querySelectorAll('#s-balanco .itab');abas.forEach(x=>x.classList.toggle('active',x.getAttribute('onclick').indexOf("'"+BAL_FILTRO+"'")>=0));
+  const rows=BAL.filter(balVisivel);
+  if(!rows.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">'+(exc?'Nenhum produto excluído.':'Nenhum produto encontrado.')+'</td></tr>';atualizaBarBal();return;}
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');tr.dataset.id=r.id;
+    if(exc){
+      tr.innerHTML='<td class="bal-nm" style="font-weight:500">'+balEsc(r.nome)+'</td><td>'+balEsc(r.grupo)+'</td><td style="font-family:var(--mo)">'+r.estoque+' '+balEsc(r.unidade)+'</td><td style="font-family:var(--mo)">'+fmt(r.preco)+'</td><td></td>';
+      const b=document.createElement('button');b.className='btn btn-s btn-sm';b.textContent='Reativar';b.onclick=()=>reativarProduto(r);
+      tr.lastElementChild.appendChild(b);tb.appendChild(tr);return;
+    }
+    if(r.excluir)tr.classList.add('bal-exc');
+    const estCor=r.estoque<=0?'color:var(--red)':r.estoque<=5?'color:var(--amb)':'';
+    tr.innerHTML='<td><span class="bal-nm" style="font-weight:600">'+balEsc(r.nome)+'</span>'+(r.repetido?'<span class="bal-rep" title="Existe outro produto com este mesmo nome">nome repetido</span>':'')+'<div style="font-size:11px;color:var(--muted)">'+balEsc(r.grupo)+'</div></td>'+
+      '<td style="font-family:var(--mo);font-weight:700;'+estCor+'">'+r.estoque+' '+balEsc(r.unidade)+'</td>'+
+      '<td class="bal-c'+(r.contado!==null&&r.contado!==r.estoque?' bal-mud':'')+'"><input type="number" class="fc" min="0" step="1" inputmode="numeric" value="'+(r.contado!==null?r.contado:r.estoque)+'"><span class="bal-dif"></span></td>'+
+      '<td class="bal-p'+(r.precoNovo!==null&&r.precoNovo!==r.preco?' bal-mud':'')+'"><input type="number" class="fc" min="0" step="0.01" inputmode="decimal" value="'+(r.precoNovo!==null?r.precoNovo:r.preco).toFixed(2)+'"></td>'+
+      '<td><label class="bal-chk"><input type="checkbox"'+(r.excluir?' checked':'')+'> Excluir</label></td>';
+    const inC=tr.querySelector('td.bal-c input'),dif=tr.querySelector('.bal-dif'),inP=tr.querySelector('td.bal-p input'),chk=tr.querySelector('td label input');
+    const pintaC=()=>{const v=balNum(inC.value);const mud=v!==null&&v!==r.estoque;inC.parentElement.classList.toggle('bal-mud',mud);dif.textContent=mud?((v-r.estoque>0?'+':'')+(v-r.estoque)):'';dif.style.color=v!==null&&v<r.estoque?'var(--red)':'var(--grn)';};
+    inC.addEventListener('input',()=>{const v=balNum(inC.value);r.contado=(v===null||v<0)?null:Math.round(v);pintaC();atualizaBarBal();});
+    inC.addEventListener('focus',()=>inC.select());
+    inP.addEventListener('input',()=>{const v=balNum(inP.value);r.precoNovo=(v===null||v<0)?null:Math.round(v*100)/100;inP.parentElement.classList.toggle('bal-mud',r.precoNovo!==null&&r.precoNovo!==r.preco);atualizaBarBal();});
+    inP.addEventListener('focus',()=>inP.select());
+    chk.addEventListener('change',()=>{r.excluir=chk.checked;tr.classList.toggle('bal-exc',r.excluir);atualizaBarBal();});
+    pintaC();tb.appendChild(tr);
+  });
+  atualizaBarBal();
+}
+function resumoBal(){
+  let q=0,p=0,e=0;
+  BAL.forEach(r=>{if(!r.ativo)return;if(r.excluir){e++;return;}if(r.contado!==null&&r.contado!==r.estoque)q++;if(r.precoNovo!==null&&r.precoNovo!==r.preco)p++;});
+  return{q,p,e,total:q+p+e};
+}
+function atualizaBarBal(){
+  const s=resumoBal();const n=document.getElementById('bal-n');const b=document.getElementById('bal-salvar');
+  if(!s.total){n.textContent='Nenhuma alteração ainda';b.disabled=true;return;}
+  const partes=[];if(s.q)partes.push(s.q+' quantidade'+(s.q>1?'s':''));if(s.p)partes.push(s.p+' preço'+(s.p>1?'s':''));if(s.e)partes.push(s.e+' exclus'+(s.e>1?'ões':'ão'));
+  n.innerHTML='<b>'+s.total+'</b> alteraç'+(s.total>1?'ões':'ão')+' para salvar: '+partes.join(', ');b.disabled=false;
+}
+function movBase(r){
+  return{produto_id:r.id,produto_nome:r.nome,produto_grupo:r.grupo,quantidade:null,preco_unitario:r.preco,valor_total:0,valor_liquido:0,taxa_valor:0,cliente_tipo:null,forma_pagamento:null,profissional_id:null,profissional_nome:null,secretaria_id:CU.id,secretaria_nome:CU.nome,timestamp:firebase.firestore.FieldValue.serverTimestamp(),marcado_erro:false,motivo_erro:null};
+}
+async function salvarBalanco(){
+  const s=resumoBal();if(!s.total)return;
+  const linhas=[];if(s.q)linhas.push('- '+s.q+' quantidade(s) corrigida(s)');if(s.p)linhas.push('- '+s.p+' preço(s) alterado(s)');if(s.e)linhas.push('- '+s.e+' produto(s) excluído(s)');
+  if(!confirm('Salvar o balanço?\n\n'+linhas.join('\n')))return;
+  const b=document.getElementById('bal-salvar');b.disabled=true;b.textContent='Salvando...';
+  const mudadas=BAL.filter(balMudou);let feitos=0,falhas=0;
+  for(const r of mudadas){
+    const ref=db.collection('produtos').doc(r.id);
+    try{
+      if(r.excluir){
+        await ref.update({ativo:false});
+        await db.collection('movimentacoes').add({...movBase(r),tipo:'edicao_produto',descricao:'Produto excluído do estoque pelo balanço (tinha '+r.estoque+' '+r.unidade+')'});
+        feitos++;continue;
+      }
+      if(r.contado!==null&&r.contado!==r.estoque){
+        const novo=r.contado;
+        await db.runTransaction(async t=>{
+          const snap=await t.get(ref);const atual=Number((snap.data()||{}).estoque_atual)||0;
+          if(atual===novo)return;
+          t.update(ref,{estoque_atual:novo});
+          t.set(db.collection('movimentacoes').doc(),{...movBase(r),tipo:'ajuste_estoque',quantidade:novo-atual,descricao:'Balanço: '+atual+' → '+novo+' '+r.unidade});
+        });
+      }
+      if(r.precoNovo!==null&&r.precoNovo!==r.preco){
+        await ref.update({preco_venda:r.precoNovo});
+        await db.collection('movimentacoes').add({...movBase(r),tipo:'edicao_produto',preco_unitario:r.precoNovo,descricao:'Preço de venda: '+fmt(r.preco)+' → '+fmt(r.precoNovo)});
+      }
+      feitos++;
+    }catch(e){console.error('[BALANCO]',r.nome,e);falhas++;}
+  }
+  b.textContent='Salvar balanço';
+  await loadCaches();
+  if(falhas)toast('Salvou '+feitos+', mas '+falhas+' deu erro. Confira a lista e tente de novo.','ko');else toast('Balanço salvo! '+feitos+' produto(s) atualizado(s).','ok');
+  loadBalanco();
+}
+async function reativarProduto(r){
+  if(!confirm('Colocar "'+r.nome+'" de volta no estoque?'))return;
+  await db.collection('produtos').doc(r.id).update({ativo:true});
+  await db.collection('movimentacoes').add({...movBase(r),tipo:'edicao_produto',descricao:'Produto reativado no estoque'});
+  await loadCaches();toast('"'+r.nome+'" voltou para o estoque.','ok');loadBalanco();
+}
 
 async function loadLoginUsers(){
   // Check for public professional view
@@ -523,14 +670,14 @@ function doLogout(){try{GV.stopTimers();}catch(e){}CU=null;PC=[];PRC=[];document
 function updateDate(){document.getElementById('tb-dt').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});}
 function setDatas(){const t=todayISO(),f=firstISO();['cx-ini','h-ini','ex-ini','rel-ini'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=f;});['cx-fim','h-fim','ex-fim','rel-fim'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=t;});}
 
-const TTLS={guias:'Guias da Agenda',dashboard:'Dashboard',venda:'Nova Venda',estoque:'Entrada de Estoque',notinhas:'Notinhas',caixa:'Caixa',posicao:'Estoque Atual',profissionais:'Profissionais',historico:'Historico',exportar:'Exportar CSV',cfg:'Configuracoes'};
+const TTLS={guias:'Guias da Agenda',dashboard:'Dashboard',venda:'Nova Venda',estoque:'Entrada de Estoque',balanco:'Balanço de Estoque',notinhas:'Notinhas',caixa:'Caixa',posicao:'Estoque Atual',profissionais:'Profissionais',historico:'Historico',exportar:'Exportar CSV',cfg:'Configuracoes'};
 function nav(s){
   document.querySelectorAll('.sec').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
   document.getElementById('s-'+s).classList.add('active');
   document.querySelectorAll('.ni').forEach(x=>{if(x.getAttribute('onclick')==="nav('"+s+"')")x.classList.add('active');});
   document.getElementById('tb-ttl').textContent=TTLS[s]||s;
-  const fn={guias:function(){GV.boot();},dashboard:loadDashboard,venda:loadVendaForm,estoque:resetEstoque,notinhas:loadNotinhas,caixa:loadCaixa,posicao:loadPosicao,profissionais:loadProfTable,historico:loadHistorico,cfg:loadCfg};
+  const fn={guias:function(){GV.boot();},dashboard:loadDashboard,venda:loadVendaForm,estoque:resetEstoque,balanco:loadBalanco,notinhas:loadNotinhas,caixa:loadCaixa,posicao:loadPosicao,profissionais:loadProfTable,historico:loadHistorico,cfg:loadCfg};
   if(fn[s])fn[s]();
 }
 
@@ -910,6 +1057,7 @@ async function confirmarErro(){
   if(m.tipo==='bonificacao'&&m.profissional_id)await db.collection('profissionais').doc(m.profissional_id).update({saldo_devedor:firebase.firestore.FieldValue.increment(m.valor_total||0)});
   if(['venda_paciente','venda_profissional'].includes(m.tipo)&&m.produto_id)await db.collection('produtos').doc(m.produto_id).update({estoque_atual:firebase.firestore.FieldValue.increment(m.quantidade||1)});
   if(m.tipo==='entrada_estoque'&&m.produto_id)await db.collection('produtos').doc(m.produto_id).update({estoque_atual:firebase.firestore.FieldValue.increment(-(m.quantidade||1))});
+  if(m.tipo==='ajuste_estoque'&&m.produto_id)await db.collection('produtos').doc(m.produto_id).update({estoque_atual:firebase.firestore.FieldValue.increment(-(m.quantidade||0))});
   closeM('m-err');toast('Lancamento marcado como erro.','ok');
   if(CPID)abrirDetNot(CPID,CPNM);else loadHistorico();
 }
